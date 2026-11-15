@@ -1,5 +1,3 @@
-import * as THREE from "/vendor/three.module.js";
-
 const clone = value => structuredClone(value);
 const clamp = (value,min,max) => Math.max(min,Math.min(max,value));
 const rad = deg => deg*Math.PI/180;
@@ -135,6 +133,7 @@ function placementMessages(instance,cfg,box,instances){
   if(instance.inBox&&v.top>maxY+0.8){messages.push(instance.name+" cao hơn khoảng đóng nắp "+round(v.top-maxY)+" mm.");invalidIds.push(instance.instanceId);}
   const tiltX=((Number(instance.rotX||0)%360)+360)%360,tiltZ=((Number(instance.rotZ||0)%360)+360)%360;
   if(instance.profile.upright&&(Math.min(tiltX,360-tiltX)>1||Math.min(tiltZ,360-tiltZ)>1)){messages.push(instance.name+" phải được giữ đứng.");invalidIds.push(instance.instanceId);}
+  if(cfg.primaryFaceRule==="up"&&(Math.min(tiltX,360-tiltX)>1||Math.min(tiltZ,360-tiltZ)>1||instance.labelFacing!=="up")){messages.push(instance.name+" phải đặt mặt chính hướng lên trên.");invalidIds.push(instance.instanceId);}
   if(instance.inBox&&space.divider&&Math.abs(instance.x)<Number(space.divider.thickness||6)/2+d.length/2){messages.push(instance.name+" đang giao với vách ngăn.");invalidIds.push(instance.instanceId);}
   instances.forEach(other=>{if(other.instanceId!==instance.instanceId&&other.inBox&&instance.inBox&&instancesCollide(instance,other)){messages.push(instance.name+" đang xuyên "+other.name+".");invalidIds.push(instance.instanceId,other.instanceId);}});
   if(instance.inBox&&v.bottom>space.floor+2){
