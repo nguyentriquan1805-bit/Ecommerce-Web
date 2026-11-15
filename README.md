@@ -9,7 +9,7 @@ Chạy `node preview-server.mjs`, sau đó mở `http://127.0.0.1:4174`. Nếu c
 ## Phần đang hoạt động trong demo
 
 - Điều hướng SPA với trang chủ, bộ sưu tập, chi tiết hộp, Gift Finder, xác thực demo, builder năm bước, giỏ, checkout, xác nhận, theo dõi, tài khoản, hộp đã lưu và dịp quan trọng.
-- Bước cuối của “Tự tạo hộp” là bàn xếp 3D tại `/tu-tao-hop/xep-3d`: mỗi đơn vị sản phẩm là một khối riêng, có kéo/thả, xoay/lật, bắt lưới, khóa vị trí, hoàn tác/làm lại, gợi ý bố cục, vật liệu chèn lót, thử đóng nắp và báo cáo độ ổn định. Va chạm cứng chặn hai món giao nhau; vị trí vượt thành hoặc vượt mặt nắp cũng bị từ chối ngay.
+- Bước cuối của “Tự tạo hộp” là bàn xếp 3D tại `/tu-tao-hop/xep-3d`: mỗi đơn vị sản phẩm là một khối riêng, có kéo/thả, dựng đứng, nằm ngang, nằm cạnh, lật mặt 180°, bắt lưới, khóa vị trí, hoàn tác/làm lại, gợi ý bố cục, vật liệu chèn lót, thử đóng nắp và báo cáo độ ổn định. Va chạm cứng chặn hai món giao nhau; vị trí vượt thành hoặc vượt mặt nắp cũng bị từ chối ngay.
 - Bố cục 3D hợp lệ được lưu có cấu trúc cùng dòng giỏ hàng; khu vực người bán có thể xem lại mô hình và thứ tự đóng gói gợi ý trong chi tiết đơn.
 - Dữ liệu mẫu dùng chung cho danh mục, Gift Finder, builder, giỏ và đơn.
 - Giỏ khách, đăng nhập giả lập có returnTo, lưu nháp/dịp theo tài khoản demo bằng localStorage.
@@ -18,12 +18,13 @@ Chạy `node preview-server.mjs`, sau đó mở `http://127.0.0.1:4174`. Nếu c
 - Khu vực người bán tại `/quan-tri` gồm tổng quan, sản phẩm, tồn kho, tùy chọn hộp, đơn hàng, giao hàng và cài đặt.
 - Sản phẩm đã đăng bán, tồn kho, bao bì, thiệp, ruy băng và lịch giao được đồng bộ sang cửa hàng, Gift Finder, Builder và checkout trong cùng trình duyệt.
 - Ảnh sản phẩm có thể chọn trực tiếp từ thiết bị (JPG/PNG/WebP, tối đa 5MB/ảnh và 8 ảnh) và được lưu trong localStorage của trình duyệt demo.
+- Trong trang sửa sản phẩm, người bán có thể chụp/tải một ảnh mặt trước rồi nhập chiều ngang, chiều sâu và chiều cao. Demo tự dựng khung hộp hoặc hình trụ đúng kích thước và phủ ảnh đó lên bề mặt để sản phẩm xuất hiện trong bàn xếp 3D.
 
 ## Phần chưa kết nối vận hành thật
 
 - Không có backend, xác thực an toàn, cơ sở dữ liệu, giữ tồn đa người dùng, cổng thanh toán, đơn vị giao hàng, email hay tiến trình nhắc nền.
-- Mô hình 3D hiện dùng hình học hộp/trụ nhẹ để chạy ngay trên trình duyệt. Trường GLB trong quản trị chỉ kiểm tra tên và dung lượng tệp ở bản demo; cần kho tệp, xử lý mô hình, collider và kiểm duyệt ở backend để vận hành thật.
-- Ảnh đang là khung minh họa có tên sản phẩm theo yêu cầu hiện tại; cần thay bằng ảnh sản phẩm đã xác nhận trước khi vận hành.
+- Mô hình 3D hiện dùng hình học hộp/trụ nhẹ để chạy ngay trên trình duyệt. Tính năng ảnh + kích thước tạo một khung 3D có texture, không phải quét hình học hay photogrammetry. Trường GLB trong quản trị chỉ kiểm tra tên và dung lượng tệp ở bản demo; cần kho tệp, xử lý mô hình, collider và kiểm duyệt ở backend để vận hành thật.
+- Ảnh sản phẩm và ảnh phủ 3D chỉ lưu cục bộ trong trình duyệt demo; bản thật cần object storage, tối ưu ảnh và kiểm tra nội dung/quyền sở hữu.
 - Giá, SKU, tồn kho, vùng và khung giao đều là dữ liệu minh họa.
 - Bản thật cần kiểm tra quyền sở hữu, giá, tồn, suất giao và trạng thái thanh toán ở server.
 

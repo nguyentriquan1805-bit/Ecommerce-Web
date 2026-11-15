@@ -14,7 +14,7 @@ function profileFrom(item){
     weight:Number(model.weight||120),padding:Number(model.padding||0),
     upright:!!model.upright,fragile:!!model.fragile,compressible:!!model.compressible,
     stackable:model.stackable!==false,canSupport:!!model.canSupport,maxLoad:Number(model.maxLoad||0),
-    collider:model.collider||model.shape||"box",color:model.color||"#a98372",
+    collider:model.collider||model.shape||"box",color:model.color||"#a98372",textureData:model.textureData||"",
     modelVersion:model.modelVersion||"simple-1",colliderVersion:model.colliderVersion||"simple-1",
     sourceType:model.sourceType||"simple",sourceName:model.sourceName||"Mô hình kích thước đơn giản"
   };
@@ -71,9 +71,10 @@ function materialSpace(cfg){
   };
 }
 function footprintDimensions(instance){
-  const p=instance.profile, xTurn=((Math.round(instance.rotX/90)%2)+2)%2;
+  const p=instance.profile, xTurn=((Math.round(instance.rotX/90)%2)+2)%2, zTurn=((Math.round(instance.rotZ/90)%2)+2)%2;
   let length=p.length,width=p.width,height=p.height;
   if(xTurn&&!p.upright){const old=height;height=width;width=old;}
+  if(zTurn&&!p.upright){const old=height;height=length;length=old;}
   return {length,width,height};
 }
 function dimensions(instance){
@@ -132,7 +133,8 @@ function placementMessages(instance,cfg,box,instances){
   if(instance.inBox&&(instance.x-d.length/2-pad<-halfL||instance.x+d.length/2+pad>halfL||instance.z-d.width/2-pad<-halfW||instance.z+d.width/2+pad>halfW)){messages.push(instance.name+" đang vượt thành hộp.");invalidIds.push(instance.instanceId);}
   if(instance.inBox&&v.bottom<space.floor-0.8){messages.push(instance.name+" xuyên đáy hoặc lớp lót.");invalidIds.push(instance.instanceId);}
   if(instance.inBox&&v.top>maxY+0.8){messages.push(instance.name+" cao hơn khoảng đóng nắp "+round(v.top-maxY)+" mm.");invalidIds.push(instance.instanceId);}
-  if(instance.profile.upright&&(Math.abs(instance.rotX)%180>1||Math.abs(instance.rotZ)%180>1)){messages.push(instance.name+" phải được giữ đứng.");invalidIds.push(instance.instanceId);}
+  const tiltX=((Number(instance.rotX||0)%360)+360)%360,tiltZ=((Number(instance.rotZ||0)%360)+360)%360;
+  if(instance.profile.upright&&(Math.min(tiltX,360-tiltX)>1||Math.min(tiltZ,360-tiltZ)>1)){messages.push(instance.name+" phải được giữ đứng.");invalidIds.push(instance.instanceId);}
   if(instance.inBox&&space.divider&&Math.abs(instance.x)<Number(space.divider.thickness||6)/2+d.length/2){messages.push(instance.name+" đang giao với vách ngăn.");invalidIds.push(instance.instanceId);}
   instances.forEach(other=>{if(other.instanceId!==instance.instanceId&&other.inBox&&instance.inBox&&instancesCollide(instance,other)){messages.push(instance.name+" đang xuyên "+other.name+".");invalidIds.push(instance.instanceId,other.instanceId);}});
   if(instance.inBox&&v.bottom>space.floor+2){
@@ -237,7 +239,14 @@ function createItemMesh(instance){
   const p=instance.profile,geometry=p.shape==="cylinder"?
     new THREE.CylinderGeometry(p.length/2,p.length/2,p.height,32):
     new THREE.BoxGeometry(p.length,p.height,p.width);
-  const material=new THREE.MeshStandardMaterial({color:new THREE.Color(p.color||"#a98372"),roughness:.66,metalness:.02,emissive:0x000000});
+  const baseMaterial=()=>new THREE.MeshStandardMaterial({color:new THREE.Color(p.color||"#a98372"),roughness:.66,metalness:.02,emissive:0x000000});
+  let material=baseMaterial();
+  if(p.textureData){
+    const texture=new THREE.TextureLoader().load(p.textureData);texture.colorSpace=THREE.SRGBColorSpace;texture.anisotropy=4;
+    const photoMaterial=()=>new THREE.MeshStandardMaterial({color:0xffffff,map:texture,roughness:.58,metalness:.01,emissive:0x000000});
+    if(p.shape==="cylinder") material=[photoMaterial(),baseMaterial(),baseMaterial()];
+    else material=[baseMaterial(),baseMaterial(),baseMaterial(),baseMaterial(),photoMaterial(),photoMaterial()];
+  }
   const mesh=new THREE.Mesh(geometry,material);mesh.userData.instanceId=instance.instanceId;mesh.castShadow=true;mesh.receiveShadow=true;
   mesh.position.set(instance.x,instance.y,instance.z);mesh.rotation.set(rad(instance.rotX),rad(instance.rotY),rad(instance.rotZ));
   return mesh;
@@ -309,7 +318,7 @@ export function mountPackingStudio(options){
     const d=dimensions(instance),v=verticalRange(instance),stateText=instance.inBox?"Trong hộp":"Ở khay chờ";
     inspector.innerHTML='<div class="pack-inspector-head"><span class="pack-item-swatch" style="--item-color:'+instance.profile.color+'"></span><div><span class="eyebrow">'+stateText+'</span><h3>'+safeText(instance.name)+'</h3><p>'+round(d.length)+' × '+round(d.width)+' × '+round(d.height)+' mm · '+round(instance.profile.weight)+' g</p></div></div>'+
       '<div class="pack-tool-group"><strong>Di chuyển 10 mm</strong><div class="move-pad"><span></span><button data-pack-nudge="z-">↑</button><span></span><button data-pack-nudge="x-">←</button><button data-pack-action="place">'+(instance.inBox?"Căn giữa":"Đưa vào hộp")+'</button><button data-pack-nudge="x+">→</button><span></span><button data-pack-nudge="z+">↓</button><span></span></div><div class="row wrap"><button data-pack-nudge="y+">Nâng +5</button><button data-pack-nudge="y-">Hạ −5</button></div></div>'+
-      '<div class="pack-tool-group"><strong>Xoay & hướng đặt</strong><div class="row wrap"><button data-pack-rotate="-15">−15°</button><button data-pack-rotate="15">+15°</button><button data-pack-rotate="90">+90°</button><button data-pack-action="flip" '+(instance.profile.upright?"disabled":"")+'>Lật 90°</button></div></div>'+
+      '<div class="pack-tool-group"><strong>Xoay & hướng đặt</strong><div class="row wrap"><button data-pack-rotate="-15">−15°</button><button data-pack-rotate="15">+15°</button><button data-pack-rotate="90">+90°</button></div><div class="orientation-buttons"><button data-pack-action="stand">Dựng đứng</button><button data-pack-action="lie-width" '+(instance.profile.upright?"disabled title=\"Người bán yêu cầu giữ đứng\"":"")+'>Nằm ngang</button><button data-pack-action="lie-length" '+(instance.profile.upright?"disabled title=\"Người bán yêu cầu giữ đứng\"":"")+'>Nằm cạnh</button><button data-pack-action="turn-over" '+(instance.profile.upright?"disabled title=\"Người bán yêu cầu giữ đứng\"":"")+'>Lật mặt 180°</button></div></div>'+
       '<details class="pack-advanced"><summary>Vị trí chính xác</summary><div class="pack-coordinate-grid"><label>X<input data-pack-coordinate="x" type="number" value="'+round(instance.x)+'"></label><label>Y<input data-pack-coordinate="y" type="number" value="'+round(instance.y)+'"></label><label>Z<input data-pack-coordinate="z" type="number" value="'+round(instance.z)+'"></label><label>Góc<input data-pack-coordinate="rotY" type="number" value="'+round(instance.rotY)+'"></label></div><button data-pack-action="apply-coordinates">Áp dụng tọa độ</button></details>'+
       '<div class="pack-tool-group row wrap"><button data-pack-action="lock">'+(instance.locked?"Mở khóa vị trí":"Khóa vị trí")+'</button><button data-pack-action="tray" '+(!instance.inBox?"disabled":"")+'>Đưa về khay</button><button data-pack-action="delete" class="danger-text">Xóa khỏi cấu hình</button></div>'+
       '<p class="fine-print">'+(instance.profile.upright?"Món này phải giữ đứng. ":"")+(instance.profile.fragile?"Nhãn dễ vỡ. ":"")+(instance.profile.canSupport?"Có thể làm mặt đỡ tối đa "+instance.profile.maxLoad+" g.":"Không dùng làm mặt đỡ.")+'</p>';
@@ -322,7 +331,7 @@ export function mountPackingStudio(options){
   function paintValidation(report){
     cfg.instances.forEach(instance=>{
       const mesh=meshFor(instance.instanceId);if(!mesh)return;
-      const invalid=report.invalidIds.includes(instance.instanceId);mesh.material.emissive.setHex(invalid?0x741426:instance.instanceId===selectedId?0x3d171e:0x000000);mesh.material.emissiveIntensity=invalid ? .7 : (instance.instanceId===selectedId ? .23 : 0);
+      const invalid=report.invalidIds.includes(instance.instanceId),materials=Array.isArray(mesh.material)?mesh.material:[mesh.material];materials.forEach(material=>{material.emissive?.setHex(invalid?0x741426:instance.instanceId===selectedId?0x3d171e:0x000000);material.emissiveIntensity=invalid ? .7 : (instance.instanceId===selectedId ? .23 : 0);});
     });
     if(selectionHelper)selectionHelper.update();
     if(footerStatus){footerStatus.textContent=report.valid?"Bố cục hợp lệ · nắp còn "+round(report.lidClearanceMm)+" mm":report.messages.length+" điểm cần sửa";footerStatus.className="pack-footer-status "+(report.valid?"valid":"invalid");}
@@ -442,7 +451,10 @@ export function mountPackingStudio(options){
     const rotate=event.target.closest("[data-pack-rotate]");if(rotate){mutateSelected(instance=>{instance.rotY=(instance.rotY+Number(rotate.dataset.packRotate))%360;},"Đã xoay món.");return;}
     const action=event.target.closest("[data-pack-action]");if(!action)return;const type=action.dataset.packAction;
     if(type==="place")return placeSelected("flat");
-    if(type==="flip")return mutateSelected(instance=>{if(!instance.profile.upright)instance.rotX=(instance.rotX+90)%180;},"Đã đổi hướng đặt.");
+    if(type==="stand")return mutateSelected(instance=>{instance.rotX=0;instance.rotZ=0;instance.y=materialSpace(cfg).floor+dimensions(instance).height/2;instance.inBox=true;},"Đã dựng sản phẩm đứng.");
+    if(type==="lie-width")return mutateSelected(instance=>{if(!instance.profile.upright){instance.rotX=90;instance.rotZ=0;instance.y=materialSpace(cfg).floor+dimensions(instance).height/2;instance.inBox=true;}},"Đã đặt sản phẩm nằm ngang.");
+    if(type==="lie-length")return mutateSelected(instance=>{if(!instance.profile.upright){instance.rotX=0;instance.rotZ=90;instance.y=materialSpace(cfg).floor+dimensions(instance).height/2;instance.inBox=true;}},"Đã đặt sản phẩm nằm cạnh.");
+    if(type==="turn-over")return mutateSelected(instance=>{if(!instance.profile.upright){instance.rotX=(instance.rotX+180)%360;instance.y=materialSpace(cfg).floor+dimensions(instance).height/2;instance.inBox=true;}},"Đã lật mặt sản phẩm 180°.");
     if(type==="lock"){const instance=selected();if(!instance)return;remember();instance.locked=!instance.locked;notifyChange(instance.locked?"Đã khóa vị trí.":"Đã mở khóa vị trí.");return;}
     if(type==="tray")return mutateSelected(instance=>{Object.assign(instance,trayPosition(instance),{inBox:false});},"Đã đưa món về khay chờ.",{validate:false});
     if(type==="delete"){const instance=selected();if(!instance)return;if(!confirm("Xóa một đơn vị "+instance.name+" khỏi cấu hình và danh sách món?"))return;options.onDeleteInstance?.(instance);return;}
@@ -464,7 +476,7 @@ export function mountPackingStudio(options){
   root.querySelectorAll("[data-pack-panel]").forEach(button=>button.addEventListener("click",()=>{root.dataset.mobilePanel=button.dataset.packPanel;root.querySelectorAll("[data-pack-panel]").forEach(x=>x.classList.toggle("active",x===button));}));
   refreshInspector();currentReport(false);
 
-  return {destroy(){destroyed=true;cancelAnimationFrame(animation);resizeObserver?.disconnect();canvas?.removeEventListener("pointerdown",onPointerDown);canvas?.removeEventListener("pointermove",onPointerMove);canvas?.removeEventListener("pointerup",onPointerUp);canvas?.removeEventListener("pointercancel",onPointerUp);canvas?.removeEventListener("wheel",onWheel);root.removeEventListener("click",handleRootClick);scene?.traverse(object=>{object.geometry?.dispose?.();if(Array.isArray(object.material))object.material.forEach(m=>m.dispose?.());else object.material?.dispose?.();});renderer?.dispose?.();}};
+  return {destroy(){destroyed=true;cancelAnimationFrame(animation);resizeObserver?.disconnect();canvas?.removeEventListener("pointerdown",onPointerDown);canvas?.removeEventListener("pointermove",onPointerMove);canvas?.removeEventListener("pointerup",onPointerUp);canvas?.removeEventListener("pointercancel",onPointerUp);canvas?.removeEventListener("wheel",onWheel);root.removeEventListener("click",handleRootClick);scene?.traverse(object=>{object.geometry?.dispose?.();const materials=Array.isArray(object.material)?object.material:[object.material];materials.filter(Boolean).forEach(m=>{m.map?.dispose?.();m.dispose?.();});});renderer?.dispose?.();}};
 }
 
 export function mountReadonlyPackingPreview(options){
@@ -478,5 +490,5 @@ export function mountReadonlyPackingPreview(options){
     const animate=()=>{if(destroyed)return;animation=requestAnimationFrame(animate);itemGroup.rotation.y+=.0012;renderer.render(scene,camera);};animate();
   }catch(error){canvas.replaceWith(Object.assign(document.createElement("div"),{className:"notice error",textContent:"Không thể mở WebGL. Hãy dùng ảnh chụp và danh sách tọa độ."}));}
   const onClick=event=>{const button=event.target.closest("[data-preview-view]");if(button&&camera)setCameraView(camera,target,button.dataset.previewView,box);};root.addEventListener("click",onClick);
-  return {destroy(){destroyed=true;cancelAnimationFrame(animation);resizeObserver?.disconnect();root.removeEventListener("click",onClick);scene?.traverse(object=>{object.geometry?.dispose?.();if(Array.isArray(object.material))object.material.forEach(m=>m.dispose?.());else object.material?.dispose?.();});renderer?.dispose?.();}};
+  return {destroy(){destroyed=true;cancelAnimationFrame(animation);resizeObserver?.disconnect();root.removeEventListener("click",onClick);scene?.traverse(object=>{object.geometry?.dispose?.();const materials=Array.isArray(object.material)?object.material:[object.material];materials.filter(Boolean).forEach(m=>{m.map?.dispose?.();m.dispose?.();});});renderer?.dispose?.();}};
 }
