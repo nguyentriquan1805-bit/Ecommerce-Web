@@ -225,12 +225,34 @@ function createBoxMeshes(box,cfg){
 
 function createMaterialMeshes(cfg,box){
   const group=new THREE.Group(),space=materialSpace(cfg);
+  let floorY=0;
   selectedMaterials(cfg).forEach(material=>{
     const color=new THREE.Color(material.color||"#ddd0ba"),texture=loadTiledTexture(material.assetTexture,6,5);
-    if(material.kind==="liner"||material.kind==="fiber"){
+    if(material.kind==="liner"){
       const height=Number(material.thickness||2);
-      const mesh=new THREE.Mesh(new THREE.BoxGeometry(Number(box.innerLength)-4,height,Number(box.innerWidth)-4),new THREE.MeshStandardMaterial({color,map:texture,roughness:.95,transparent:material.kind==="fiber",opacity:material.kind==="fiber"?.72:1}));
-      mesh.position.y=height/2;mesh.receiveShadow=true;group.add(mesh);
+      const mesh=new THREE.Mesh(new THREE.BoxGeometry(Number(box.innerLength)-5,height,Number(box.innerWidth)-5),new THREE.MeshStandardMaterial({color,map:texture,roughness:.96}));
+      mesh.position.y=floorY+height/2;mesh.receiveShadow=true;group.add(mesh);floorY+=height;
+    }
+    if(material.kind==="fiber"){
+      const height=Number(material.thickness||6),length=Number(box.innerLength)-12,width=Number(box.innerWidth)-12;
+      const bed=new THREE.Mesh(new THREE.BoxGeometry(length,Math.max(1,height*.18),width),new THREE.MeshStandardMaterial({color,roughness:1,transparent:true,opacity:.55}));
+      bed.position.y=floorY+Math.max(1,height*.18)/2;bed.receiveShadow=true;group.add(bed);
+      const strandMaterial=new THREE.MeshStandardMaterial({color,roughness:.98,metalness:0});
+      if(material.id==="honeycomb"){
+        const cells=18;
+        for(let i=0;i<cells;i++){
+          const barLength=28+(i%4)*7,bar=new THREE.Mesh(new THREE.BoxGeometry(barLength,Math.max(1.2,height*.18),2.1),strandMaterial);
+          const column=i%6,row=Math.floor(i/6);bar.position.set(-length*.38+column*length*.15,floorY+height*.58,-width*.28+row*width*.28);bar.rotation.y=(i%2?1:-1)*Math.PI/4;bar.castShadow=true;group.add(bar);
+          const cross=bar.clone();cross.rotation.y=-bar.rotation.y;cross.position.x+=6;group.add(cross);
+        }
+      }else{
+        const strands=32;
+        for(let i=0;i<strands;i++){
+          const strandLength=22+(i%6)*7,strand=new THREE.Mesh(new THREE.CylinderGeometry(.8,.8,strandLength,6),strandMaterial);
+          const column=i%8,row=Math.floor(i/8);strand.position.set(-length*.42+column*length*.12,floorY+height*(.32+(i%3)*.18),-width*.36+row*width*.24);strand.rotation.z=Math.PI/2;strand.rotation.y=((i*37)%120-60)*Math.PI/180;strand.rotation.x=((i%3)-1)*.18;strand.castShadow=true;group.add(strand);
+        }
+      }
+      floorY+=height;
     }
     if(material.kind==="divider"){
       const thickness=Number(material.thickness||6);
