@@ -1,4 +1,4 @@
-import { packingStudioMarkup, mountPackingStudio, syncPackingConfiguration, validatePackingConfiguration, mountReadonlyPackingPreview } from "/packing3d.js?v=20261115-2";
+import { packingStudioMarkup, mountPackingStudio, syncPackingConfiguration, validatePackingConfiguration, mountReadonlyPackingPreview } from "/packing3d.js?v=20261115-3";
 
 const BRAND = {
   name: "Gói Thương",

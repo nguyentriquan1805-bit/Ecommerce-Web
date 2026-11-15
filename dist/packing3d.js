@@ -70,12 +70,15 @@ function materialSpace(cfg){
     divider:chosen.find(x=>x.kind==="divider")||null
   };
 }
-function dimensions(instance){
-  const p=instance.profile, xTurn=((Math.round(instance.rotX/90)%2)+2)%2, yTurn=((Math.round(instance.rotY/90)%2)+2)%2;
+function footprintDimensions(instance){
+  const p=instance.profile, xTurn=((Math.round(instance.rotX/90)%2)+2)%2;
   let length=p.length,width=p.width,height=p.height;
   if(xTurn&&!p.upright){const old=height;height=width;width=old;}
-  if(yTurn){const old=length;length=width;width=old;}
   return {length,width,height};
+}
+function dimensions(instance){
+  const base=footprintDimensions(instance),angle=rad(Number(instance.rotY||0)),cos=Math.abs(Math.cos(angle)),sin=Math.abs(Math.sin(angle));
+  return {length:cos*base.length+sin*base.width,width:sin*base.length+cos*base.width,height:base.height};
 }
 function verticalRange(instance){
   const d=dimensions(instance);return {bottom:instance.y-d.height/2,top:instance.y+d.height/2,height:d.height};
@@ -87,21 +90,35 @@ function horizontalOverlap(a,b){
   const oz=overlapAmount(a.z-ad.width/2,a.z+ad.width/2,b.z-bd.width/2,b.z+bd.width/2);
   return {x:ox,z:oz,area:ox*oz,ratio:ox*oz/Math.max(1,Math.min(ad.length*ad.width,bd.length*bd.width))};
 }
+function collisionMargin(instance){return Math.max(0,Number(instance.profile.padding||0))/2+.75;}
+function orientedBox(instance){
+  const d=footprintDimensions(instance),angle=rad(Number(instance.rotY||0)),cos=Math.cos(angle),sin=Math.sin(angle),margin=collisionMargin(instance);
+  return {x:instance.x,z:instance.z,hx:d.length/2+margin,hz:d.width/2+margin,ux:{x:cos,z:sin},uz:{x:-sin,z:cos}};
+}
 function circleBoxCollision(circle,boxInst){
-  const cd=dimensions(circle),bd=dimensions(boxInst),radius=Math.min(cd.length,cd.width)/2;
-  const cx=clamp(circle.x,boxInst.x-bd.length/2,boxInst.x+bd.length/2);
-  const cz=clamp(circle.z,boxInst.z-bd.width/2,boxInst.z+bd.width/2);
-  return (circle.x-cx)**2+(circle.z-cz)**2<radius**2;
+  const cd=footprintDimensions(circle),box=orientedBox(boxInst),radius=Math.min(cd.length,cd.width)/2+collisionMargin(circle),dx=circle.x-box.x,dz=circle.z-box.z;
+  const localX=dx*box.ux.x+dz*box.ux.z,localZ=dx*box.uz.x+dz*box.uz.z;
+  const closestX=clamp(localX,-box.hx,box.hx),closestZ=clamp(localZ,-box.hz,box.hz);
+  return (localX-closestX)**2+(localZ-closestZ)**2<radius**2;
+}
+function orientedBoxesCollide(a,b){
+  const aa=orientedBox(a),bb=orientedBox(b),dx=bb.x-aa.x,dz=bb.z-aa.z,axes=[aa.ux,aa.uz,bb.ux,bb.uz];
+  return axes.every(axis=>{
+    const distance=Math.abs(dx*axis.x+dz*axis.z);
+    const radiusA=aa.hx*Math.abs(axis.x*aa.ux.x+axis.z*aa.ux.z)+aa.hz*Math.abs(axis.x*aa.uz.x+axis.z*aa.uz.z);
+    const radiusB=bb.hx*Math.abs(axis.x*bb.ux.x+axis.z*bb.ux.z)+bb.hz*Math.abs(axis.x*bb.uz.x+axis.z*bb.uz.z);
+    return distance<radiusA+radiusB-.25;
+  });
 }
 function horizontalCollision(a,b){
   const ap=a.profile.collider||a.profile.shape,bp=b.profile.collider||b.profile.shape;
   if(ap==="cylinder"&&bp==="cylinder"){
-    const ar=Math.min(dimensions(a).length,dimensions(a).width)/2,br=Math.min(dimensions(b).length,dimensions(b).width)/2;
+    const ad=footprintDimensions(a),bd=footprintDimensions(b),ar=Math.min(ad.length,ad.width)/2+collisionMargin(a),br=Math.min(bd.length,bd.width)/2+collisionMargin(b);
     return Math.hypot(a.x-b.x,a.z-b.z)<ar+br;
   }
   if(ap==="cylinder") return circleBoxCollision(a,b);
   if(bp==="cylinder") return circleBoxCollision(b,a);
-  const o=horizontalOverlap(a,b);return o.x>0.5&&o.z>0.5;
+  return orientedBoxesCollide(a,b);
 }
 function instancesCollide(a,b){
   const av=verticalRange(a),bv=verticalRange(b);
@@ -326,9 +343,12 @@ export function mountPackingStudio(options){
     cfg.instances.forEach(instance=>{const mesh=createItemMesh(instance);meshes.set(instance.instanceId,mesh);itemGroup.add(mesh);});
     scene.add(boxGroup,materialGroup,itemGroup);selectInstance(selectedId);currentReport(false);
   }
-  function mutateSelected(mutator,message){
+  function mutateSelected(mutator,message,{validate=true}={}){
     const instance=selected();if(!instance||instance.locked)return reportStatus(instance?.locked?"Món đang bị khóa vị trí.":"Hãy chọn một món.","invalid");
-    remember();mutator(instance);updateInstanceMesh(instance);notifyChange(message);
+    const original=clone(instance);remember();mutator(instance);updateInstanceMesh(instance);
+    const result=validate?placementMessages(instance,cfg,box,cfg.instances):{messages:[]};
+    if(result.messages.length){Object.assign(instance,original);history.pop();updateInstanceMesh(instance);refreshInspector();currentReport(false);reportStatus("Không thể áp dụng vị trí: "+result.messages[0],"invalid");return false;}
+    notifyChange(message);return true;
   }
   function trayPosition(instance){
     const index=cfg.instances.indexOf(instance),column=index%3,row=Math.floor(index/3);return {x:-Number(box.innerLength)/2-85-column*78,y:dimensions(instance).height/2,z:-Number(box.innerWidth)/2+45+row*70};
@@ -363,14 +383,17 @@ export function mountPackingStudio(options){
     if(!renderer)return;canvas.setPointerCapture?.(event.pointerId);const intersections=rayFromEvent(event).intersectObjects([...meshes.values()],false);
     if(intersections.length){
       const id=intersections[0].object.userData.instanceId;selectInstance(id);const instance=selected();
-      if(!instance.locked){remember();dragPlane.set(new THREE.Vector3(0,1,0),-instance.y);const hit=new THREE.Vector3();raycaster.ray.intersectPlane(dragPlane,hit);drag={id,start:{x:instance.x,y:instance.y,z:instance.z},offset:{x:instance.x-hit.x,z:instance.z-hit.z},pointerId:event.pointerId};reportStatus("Đang di chuyển "+instance.name+". Camera tạm khóa.");}
+      if(!instance.locked){remember();dragPlane.set(new THREE.Vector3(0,1,0),-instance.y);const hit=new THREE.Vector3();raycaster.ray.intersectPlane(dragPlane,hit);const start={x:instance.x,y:instance.y,z:instance.z,inBox:instance.inBox};drag={id,start,lastValid:{...start},offset:{x:instance.x-hit.x,z:instance.z-hit.z},pointerId:event.pointerId};reportStatus("Đang di chuyển "+instance.name+". Món sẽ dừng lại khi chạm vật thể khác.");}
     }else cameraDrag={x:event.clientX,y:event.clientY,pointerId:event.pointerId};
   }
   function onPointerMove(event){
     if(drag&&drag.pointerId===event.pointerId){
       const instance=cfg.instances.find(x=>x.instanceId===drag.id),hit=new THREE.Vector3();rayFromEvent(event).ray.intersectPlane(dragPlane,hit);
       let x=hit.x+drag.offset.x,z=hit.z+drag.offset.z;if(cfg.snap){x=Math.round(x/10)*10;z=Math.round(z/10)*10;}
-      instance.x=x;instance.z=z;instance.inBox=true;updateInstanceMesh(instance);const report=validatePackingConfiguration(cfg,box,lines);paintValidation(report);return;
+      instance.x=x;instance.z=z;instance.inBox=true;
+      const result=placementMessages(instance,cfg,box,cfg.instances);
+      if(result.messages.length){Object.assign(instance,drag.lastValid);updateInstanceMesh(instance);paintValidation(validatePackingConfiguration(cfg,box,lines));reportStatus("Đã chạm giới hạn: "+result.messages[0],"invalid");return;}
+      drag.lastValid={x:instance.x,y:instance.y,z:instance.z,inBox:instance.inBox};updateInstanceMesh(instance);paintValidation(validatePackingConfiguration(cfg,box,lines));return;
     }
     if(cameraDrag&&cameraDrag.pointerId===event.pointerId){
       theta-=(event.clientX-cameraDrag.x)*.008;phi=clamp(phi+(event.clientY-cameraDrag.y)*.008,.18,1.48);cameraDrag.x=event.clientX;cameraDrag.y=event.clientY;
@@ -379,9 +402,9 @@ export function mountPackingStudio(options){
   }
   function onPointerUp(event){
     if(drag&&drag.pointerId===event.pointerId){
-      const instance=cfg.instances.find(x=>x.instanceId===drag.id),result=placementMessages(instance,cfg,box,cfg.instances);
-      if(result.messages.length){Object.assign(instance,drag.start);updateInstanceMesh(instance);history.pop();reportStatus("Vị trí chưa hợp lệ; món đã trở về vị trí trước.","invalid");}
-      else {redo.length=0;notifyChange("Đã đặt "+instance.name+".");}
+      const instance=cfg.instances.find(x=>x.instanceId===drag.id),changed=instance.x!==drag.start.x||instance.y!==drag.start.y||instance.z!==drag.start.z||instance.inBox!==drag.start.inBox;
+      if(!changed){history.pop();reportStatus("Món đang ở sát giới hạn hợp lệ; không thể chồng lên món khác.","invalid");}
+      else {redo.length=0;notifyChange("Đã đặt "+instance.name+"; các vật thể vẫn tách nhau.");}
       drag=null;
     }
     cameraDrag=null;canvas.releasePointerCapture?.(event.pointerId);
@@ -420,8 +443,8 @@ export function mountPackingStudio(options){
     const action=event.target.closest("[data-pack-action]");if(!action)return;const type=action.dataset.packAction;
     if(type==="place")return placeSelected("flat");
     if(type==="flip")return mutateSelected(instance=>{if(!instance.profile.upright)instance.rotX=(instance.rotX+90)%180;},"Đã đổi hướng đặt.");
-    if(type==="lock")return mutateSelected(instance=>{instance.locked=!instance.locked;},"Đã cập nhật khóa vị trí.");
-    if(type==="tray")return mutateSelected(instance=>{Object.assign(instance,trayPosition(instance),{inBox:false});},"Đã đưa món về khay chờ.");
+    if(type==="lock"){const instance=selected();if(!instance)return;remember();instance.locked=!instance.locked;notifyChange(instance.locked?"Đã khóa vị trí.":"Đã mở khóa vị trí.");return;}
+    if(type==="tray")return mutateSelected(instance=>{Object.assign(instance,trayPosition(instance),{inBox:false});},"Đã đưa món về khay chờ.",{validate:false});
     if(type==="delete"){const instance=selected();if(!instance)return;if(!confirm("Xóa một đơn vị "+instance.name+" khỏi cấu hình và danh sách món?"))return;options.onDeleteInstance?.(instance);return;}
     if(type==="apply-coordinates")return mutateSelected(instance=>{root.querySelectorAll("[data-pack-coordinate]").forEach(input=>{const value=Number(input.value);if(Number.isFinite(value))instance[input.dataset.packCoordinate]=value;});instance.inBox=true;},"Đã áp dụng tọa độ.");
     if(type==="undo"&&history.length){redo.push(snapshot());restore(history.pop());reportStatus("Đã hoàn tác.");return;}

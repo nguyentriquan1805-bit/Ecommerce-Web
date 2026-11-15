@@ -9,7 +9,7 @@ Chạy `node preview-server.mjs`, sau đó mở `http://127.0.0.1:4174`. Nếu c
 ## Phần đang hoạt động trong demo
 
 - Điều hướng SPA với trang chủ, bộ sưu tập, chi tiết hộp, Gift Finder, xác thực demo, builder năm bước, giỏ, checkout, xác nhận, theo dõi, tài khoản, hộp đã lưu và dịp quan trọng.
-- Bước cuối của “Tự tạo hộp” là bàn xếp 3D tại `/tu-tao-hop/xep-3d`: mỗi đơn vị sản phẩm là một khối riêng, có kéo/thả, xoay/lật, bắt lưới, khóa vị trí, hoàn tác/làm lại, gợi ý bố cục, vật liệu chèn lót, thử đóng nắp và báo cáo độ ổn định.
+- Bước cuối của “Tự tạo hộp” là bàn xếp 3D tại `/tu-tao-hop/xep-3d`: mỗi đơn vị sản phẩm là một khối riêng, có kéo/thả, xoay/lật, bắt lưới, khóa vị trí, hoàn tác/làm lại, gợi ý bố cục, vật liệu chèn lót, thử đóng nắp và báo cáo độ ổn định. Va chạm cứng chặn hai món giao nhau; vị trí vượt thành hoặc vượt mặt nắp cũng bị từ chối ngay.
 - Bố cục 3D hợp lệ được lưu có cấu trúc cùng dòng giỏ hàng; khu vực người bán có thể xem lại mô hình và thứ tự đóng gói gợi ý trong chi tiết đơn.
 - Dữ liệu mẫu dùng chung cho danh mục, Gift Finder, builder, giỏ và đơn.
 - Giỏ khách, đăng nhập giả lập có returnTo, lưu nháp/dịp theo tài khoản demo bằng localStorage.
