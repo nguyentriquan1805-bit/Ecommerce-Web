@@ -19,6 +19,9 @@ Chạy `node preview-server.mjs`, sau đó mở `http://127.0.0.1:4174`. Nếu c
 - Sản phẩm đã đăng bán, tồn kho, bao bì, thiệp, ruy băng và lịch giao được đồng bộ sang cửa hàng, Gift Finder, Builder và checkout trong cùng trình duyệt.
 - Ảnh sản phẩm có thể chọn trực tiếp từ thiết bị (JPG/PNG/WebP, tối đa 5MB/ảnh và 8 ảnh) và được lưu trong localStorage của trình duyệt demo.
 - Trong trang sửa sản phẩm, người bán có thể chụp/tải một ảnh mặt trước rồi nhập chiều ngang, chiều sâu và chiều cao. Demo tự dựng khung hộp hoặc hình trụ đúng kích thước và phủ ảnh đó lên bề mặt để sản phẩm xuất hiện trong bàn xếp 3D.
+- Hộp, giấy lót, vật liệu chèn, thiệp và ruy băng đã có tài nguyên mẫu CC0 lưu ngay trong website: ba mẫu GLB cho bao bì cùng chất liệu carton/vải. Người bán thấy các mẫu này tại “Tùy chọn hộp”, khách thấy ảnh xem trước trong Builder và cảnh 3D dùng texture cục bộ, không phụ thuộc mạng ngoài.
+
+Nguồn và giấy phép của các tài nguyên mẫu được ghi tại `dist/assets/ASSET_SOURCES.md`.
 
 ## Phần chưa kết nối vận hành thật
 

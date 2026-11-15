@@ -183,7 +183,7 @@ export function packingStudioMarkup(input){
     '<div class="pack-mobile-tabs"><button data-pack-panel="items">Món & chèn lót</button><button data-pack-panel="canvas" class="active">Bàn xếp</button><button data-pack-panel="tools">Công cụ</button></div>'+ 
     '<aside class="pack-panel pack-left" data-pack-section="items"><div class="pack-panel-head"><span class="eyebrow">Món đã chọn</span><a href="/tu-tao-hop" data-route>Thay đổi món</a></div>'+syncNote+
       '<div id="pack-instance-list" class="pack-instance-list">'+instanceListHtml(cfg,esc)+'</div>'+
-      '<div class="pack-section"><div class="row spaced"><h3>Chèn lót</h3><span class="fine-print">Có tính không gian</span></div>'+materials.map(material=>'<label class="pack-material"><input type="checkbox" data-pack-material="'+material.id+'" '+(cfg.materials?.[material.id]?"checked":"")+'><span style="--material-color:'+material.color+'"></span><b>'+esc(material.name)+'</b><small>'+material.thickness+' mm · '+money(material.price)+'</small></label>').join("")+'</div>'+
+      '<div class="pack-section"><div class="row spaced"><h3>Chèn lót</h3><span class="fine-print">Có tính không gian</span></div>'+materials.map(material=>'<label class="pack-material"><input type="checkbox" data-pack-material="'+material.id+'" '+(cfg.materials?.[material.id]?"checked":"")+'><span class="pack-material-swatch" style="--material-color:'+material.color+'">'+(material.assetTexture?'<img src="'+esc(material.assetTexture)+'" alt="">':'')+'</span><b>'+esc(material.name)+'</b><small>'+material.thickness+' mm · '+money(material.price)+'</small></label>').join("")+'</div>'+
       '<p class="fine-print">Giấy sợi chỉ là lớp trang trí/đệm, không mặc định chịu lực như tấm cứng.</p></aside>'+
     '<main class="pack-workspace" data-pack-section="canvas"><div class="pack-toolbar"><div><button data-pack-view="angle" class="active">Nghiêng</button><button data-pack-view="top">Từ trên</button><button data-pack-view="front">Cạnh trước</button><button data-pack-view="side">Cạnh bên</button></div><div><button data-pack-action="wall">'+(cfg.wallFade?"Hiện thành trước":"Làm mờ thành trước")+'</button><button data-pack-action="lid">Thử đóng nắp</button></div></div>'+
       '<div class="pack-canvas-wrap"><canvas id="pack-canvas" aria-label="Bàn xếp hộp quà 3D tương tác"></canvas><div class="pack-canvas-label"><strong>'+esc(box.name)+'</strong><span>Lòng '+box.innerLength+' × '+box.innerWidth+' × '+box.innerHeight+' mm</span></div><div id="pack-scene-status" class="pack-scene-status">Kéo nền để xoay camera · chọn món rồi kéo để di chuyển</div><div id="pack-lightweight" class="pack-lightweight" hidden></div></div>'+
@@ -196,8 +196,18 @@ export function packingStudioMarkup(input){
 
 const safeText = value => String(value??"").replace(/[&<>'"]/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[char]));
 
+function loadTiledTexture(url,repeatX=4,repeatY=4){
+  if(!url) return null;
+  const texture=new THREE.TextureLoader().load(url);
+  texture.colorSpace=THREE.SRGBColorSpace;
+  texture.wrapS=texture.wrapT=THREE.RepeatWrapping;
+  texture.repeat.set(repeatX,repeatY);
+  texture.anisotropy=4;
+  return texture;
+}
+
 function createBoxMeshes(box,cfg){
-  const group=new THREE.Group(),material=new THREE.MeshStandardMaterial({color:0xd8c5a7,roughness:.78,metalness:0});
+  const group=new THREE.Group(),material=new THREE.MeshStandardMaterial({color:box.id==="large"?0x9d5a63:0xe1c9a3,roughness:.86,metalness:0});
   const frontMaterial=material.clone();frontMaterial.transparent=true;frontMaterial.opacity=cfg.wallFade?.14:.62;
   const length=Number(box.innerLength),width=Number(box.innerWidth),height=Number(box.innerHeight),wall=Number(box.wall||4),bottom=Number(box.bottom||4);
   const parts=[
@@ -208,7 +218,7 @@ function createBoxMeshes(box,cfg){
     {name:"right",size:[wall,height,width],position:[length/2+wall/2,height/2,0],mat:material}
   ];
   parts.forEach(part=>{const mesh=new THREE.Mesh(new THREE.BoxGeometry(...part.size),part.mat);mesh.name=part.name;mesh.position.set(...part.position);mesh.receiveShadow=true;mesh.castShadow=true;group.add(mesh);});
-  const lid=new THREE.Mesh(new THREE.BoxGeometry(length+wall*2,wall,width+wall*2),new THREE.MeshStandardMaterial({color:0x8f2d3f,roughness:.68,transparent:true,opacity:.88}));
+  const lid=new THREE.Mesh(new THREE.BoxGeometry(length+wall*2,wall,width+wall*2),new THREE.MeshStandardMaterial({color:box.id==="large"?0x8f2d3f:0xd6b98d,roughness:.72,transparent:true,opacity:.9}));
   lid.name="lid";lid.position.set(0,height+45,-width/2);lid.rotation.x=-Math.PI/2.5;lid.castShadow=true;group.add(lid);group.userData.lid=lid;group.userData.front=group.getObjectByName("front");
   return group;
 }
@@ -216,19 +226,19 @@ function createBoxMeshes(box,cfg){
 function createMaterialMeshes(cfg,box){
   const group=new THREE.Group(),space=materialSpace(cfg);
   selectedMaterials(cfg).forEach(material=>{
-    const color=new THREE.Color(material.color||"#ddd0ba");
+    const color=new THREE.Color(material.color||"#ddd0ba"),texture=loadTiledTexture(material.assetTexture,6,5);
     if(material.kind==="liner"||material.kind==="fiber"){
       const height=Number(material.thickness||2);
-      const mesh=new THREE.Mesh(new THREE.BoxGeometry(Number(box.innerLength)-4,height,Number(box.innerWidth)-4),new THREE.MeshStandardMaterial({color,roughness:.95,transparent:material.kind==="fiber",opacity:material.kind==="fiber"?.72:1}));
+      const mesh=new THREE.Mesh(new THREE.BoxGeometry(Number(box.innerLength)-4,height,Number(box.innerWidth)-4),new THREE.MeshStandardMaterial({color,map:texture,roughness:.95,transparent:material.kind==="fiber",opacity:material.kind==="fiber"?.72:1}));
       mesh.position.y=height/2;mesh.receiveShadow=true;group.add(mesh);
     }
     if(material.kind==="divider"){
       const thickness=Number(material.thickness||6);
-      const mesh=new THREE.Mesh(new THREE.BoxGeometry(thickness,Number(box.innerHeight)*.72,Number(box.innerWidth)-8),new THREE.MeshStandardMaterial({color,roughness:.85}));
+      const mesh=new THREE.Mesh(new THREE.BoxGeometry(thickness,Number(box.innerHeight)*.72,Number(box.innerWidth)-8),new THREE.MeshStandardMaterial({color,map:texture,roughness:.85}));
       mesh.position.y=space.floor+Number(box.innerHeight)*.36;mesh.receiveShadow=true;mesh.castShadow=true;group.add(mesh);
     }
     if(material.kind==="top"){
-      const mesh=new THREE.Mesh(new THREE.BoxGeometry(Number(box.innerLength)-10,Number(material.thickness||8),Number(box.innerWidth)-10),new THREE.MeshStandardMaterial({color,transparent:true,opacity:.42,roughness:.9}));
+      const mesh=new THREE.Mesh(new THREE.BoxGeometry(Number(box.innerLength)-10,Number(material.thickness||8),Number(box.innerWidth)-10),new THREE.MeshStandardMaterial({color,map:texture,transparent:true,opacity:.52,roughness:.9}));
       mesh.position.y=Number(box.innerHeight)-Number(material.thickness||8)/2-Number(box.lidClearance||0);group.add(mesh);
     }
   });

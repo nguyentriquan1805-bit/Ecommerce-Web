@@ -1,4 +1,4 @@
-import { packingStudioMarkup, mountPackingStudio, syncPackingConfiguration, validatePackingConfiguration, mountReadonlyPackingPreview } from "/packing3d.js?v=20261115-4";
+import { packingStudioMarkup, mountPackingStudio, syncPackingConfiguration, validatePackingConfiguration, mountReadonlyPackingPreview } from "/packing3d.js?v=20261115-5";
 
 const BRAND = {
   name: "Gói Thương",
@@ -38,21 +38,25 @@ const giftItems = [
 ].map(([id,sku,name,category,price,size,stock,lead])=>({id,sku,name,category,price,size,stock,lead}));
 
 const packaging = [
-  {id:"small",name:"Hộp nhỏ",capacity:5,price:39000,color:"Kem giấy"},
-  {id:"medium",name:"Hộp vừa",capacity:8,price:59000,color:"Kem giấy"},
-  {id:"large",name:"Hộp lớn",capacity:12,price:89000,color:"Đỏ rượu"},
+  {id:"small",name:"Hộp nhỏ",capacity:5,price:39000,color:"Kem giấy",assetModel:"/assets/models/kenney-holiday/present-a-cube.glb",assetTexture:"/assets/textures/cardboard_box_01_diff_1k.jpg",assetLicense:"CC0"},
+  {id:"medium",name:"Hộp vừa",capacity:8,price:59000,color:"Kem giấy",assetModel:"/assets/models/kenney-holiday/present-a-rectangle.glb",assetTexture:"/assets/textures/cardboard_box_01_diff_1k.jpg",assetLicense:"CC0"},
+  {id:"large",name:"Hộp lớn",capacity:12,price:89000,color:"Đỏ rượu",assetModel:"/assets/models/kenney-holiday/present-b-round.glb",assetTexture:"/assets/textures/cardboard_box_01_diff_1k.jpg",assetLicense:"CC0"},
 ];
 const cards = [
-  {id:"simple",name:"Thiệp kem tối giản",price:0},
-  {id:"blush",name:"Thiệp hồng phấn",price:19000},
-  {id:"botanical",name:"Thiệp hoa ép",price:39000},
-  {id:"photo",name:"Thiệp ảnh minh họa",price:49000},
+  {id:"simple",name:"Thiệp kem tối giản",price:0,assetTexture:"/assets/textures/cardboard_box_01_diff_1k.jpg",assetLicense:"CC0"},
+  {id:"blush",name:"Thiệp hồng phấn",price:19000,assetTexture:"/assets/textures/cardboard_box_01_diff_1k.jpg",assetLicense:"CC0"},
+  {id:"botanical",name:"Thiệp hoa ép",price:39000,assetTexture:"/assets/textures/cardboard_box_01_diff_1k.jpg",assetLicense:"CC0"},
+  {id:"photo",name:"Thiệp ảnh minh họa",price:49000,assetTexture:"/assets/textures/cardboard_box_01_diff_1k.jpg",assetLicense:"CC0"},
 ];
 const ribbons = [
-  {id:"wine",name:"Ruy băng đỏ rượu",price:0},
-  {id:"blush",name:"Ruy băng hồng trầm",price:10000},
-  {id:"sage",name:"Dây vải sage",price:15000},
+  {id:"wine",name:"Ruy băng đỏ rượu",price:0,assetTexture:"/assets/textures/fabric_pattern_07_col_1_1k.jpg",assetLicense:"CC0"},
+  {id:"blush",name:"Ruy băng hồng trầm",price:10000,assetTexture:"/assets/textures/fabric_pattern_07_col_1_1k.jpg",assetLicense:"CC0"},
+  {id:"sage",name:"Dây vải sage",price:15000,assetTexture:"/assets/textures/fabric_pattern_07_col_1_1k.jpg",assetLicense:"CC0"},
 ];
+
+const PACKAGING_ASSET_DEFAULTS = Object.fromEntries(packaging.map(x=>[x.id,{assetModel:x.assetModel,assetTexture:x.assetTexture,assetLicense:x.assetLicense}]));
+const CARD_ASSET_DEFAULTS = Object.fromEntries(cards.map(x=>[x.id,{assetTexture:x.assetTexture,assetLicense:x.assetLicense}]));
+const RIBBON_ASSET_DEFAULTS = Object.fromEntries(ribbons.map(x=>[x.id,{assetTexture:x.assetTexture,assetLicense:x.assetLicense}]));
 
 const PACKAGING_3D_DEFAULTS = {
   small:{innerLength:260,innerWidth:180,innerHeight:100,wall:4,bottom:4,maxWeight:1500,lidClearance:6,lidType:"Nắp rời"},
@@ -162,14 +166,20 @@ function ensureAdminState(){
   if(!state.admin.delivery?.slots?.length) state.admin.delivery={zone:"TP.HCM",fee:45000,capacity:12,slots:[{id:"morning",label:"9–12h",active:true,full:false},{id:"afternoon",label:"14–17h",active:true,full:true},{id:"evening",label:"18–21h",active:true,full:false}],holidays:""};
   if(state.user&&!state.user.role) state.user.role=ADMIN_ROLES[state.user.email]?.role||"customer";
   state.admin.products.forEach(p=>{if(p.kind==="item"&&!p.model3d)p.model3d=defaultModel3d(p);});
-  state.admin.packaging.forEach(p=>Object.assign(p,{...(PACKAGING_3D_DEFAULTS[p.id]||PACKAGING_3D_DEFAULTS.medium),...p}));
+  state.admin.packaging.forEach(p=>Object.assign(p,{...(PACKAGING_3D_DEFAULTS[p.id]||PACKAGING_3D_DEFAULTS.medium),...(PACKAGING_ASSET_DEFAULTS[p.id]||{}),...p}));
+  state.admin.cards.forEach(x=>Object.assign(x,{...(CARD_ASSET_DEFAULTS[x.id]||{}),...x}));
+  state.admin.ribbons.forEach(x=>Object.assign(x,{...(RIBBON_ASSET_DEFAULTS[x.id]||{}),...x}));
   if(!state.admin.materials3d) state.admin.materials3d=[
-    {id:"liner-paper",name:"Giấy lót đáy",kind:"liner",thickness:3,price:12000,support:false,active:true,color:"#e9dcc8"},
-    {id:"fiber",name:"Giấy sợi trang trí",kind:"fiber",thickness:10,price:18000,support:false,active:true,color:"#d7b9aa"},
-    {id:"foam",name:"Tấm đệm mút",kind:"liner",thickness:8,price:28000,support:true,active:true,color:"#efe7da"},
-    {id:"divider",name:"Vách ngăn",kind:"divider",thickness:6,price:25000,support:true,active:true,color:"#cdbd9f"},
-    {id:"top-paper",name:"Giấy phủ trên cùng",kind:"top",thickness:8,price:15000,support:false,active:true,color:"#ead2d6"},
+    {id:"liner-paper",name:"Giấy lót đáy",kind:"liner",thickness:3,price:12000,support:false,active:true,color:"#e9dcc8",assetTexture:"/assets/textures/cardboard_box_01_diff_1k.jpg",assetLicense:"CC0"},
+    {id:"fiber",name:"Giấy sợi trang trí",kind:"fiber",thickness:10,price:18000,support:false,active:true,color:"#d7b9aa",assetTexture:"/assets/textures/fabric_pattern_07_col_1_1k.jpg",assetLicense:"CC0"},
+    {id:"foam",name:"Tấm đệm mút",kind:"liner",thickness:8,price:28000,support:true,active:true,color:"#efe7da",assetTexture:"/assets/textures/fabric_pattern_07_col_1_1k.jpg",assetLicense:"CC0"},
+    {id:"divider",name:"Vách ngăn",kind:"divider",thickness:6,price:25000,support:true,active:true,color:"#cdbd9f",assetTexture:"/assets/textures/cardboard_box_01_diff_1k.jpg",assetLicense:"CC0"},
+    {id:"top-paper",name:"Giấy phủ trên cùng",kind:"top",thickness:8,price:15000,support:false,active:true,color:"#ead2d6",assetTexture:"/assets/textures/fabric_pattern_07_col_1_1k.jpg",assetLicense:"CC0"},
   ];
+  state.admin.materials3d.forEach(x=>{
+    if(!x.assetTexture) x.assetTexture=x.kind==="divider"||x.id==="liner-paper"?"/assets/textures/cardboard_box_01_diff_1k.jpg":"/assets/textures/fabric_pattern_07_col_1_1k.jpg";
+    if(!x.assetLicense) x.assetLicense="CC0";
+  });
   syncStorefront();
 }
 
@@ -197,6 +207,17 @@ function toast(message, action){
   document.querySelector("#toast-region")?.append(node); setTimeout(()=>node.remove(),4200);
 }
 function pageTitle(title){ document.title = title ? `${title} — ${BRAND.name}` : `${BRAND.name} — ${BRAND.tagline}`; }
+
+function assetThumb(type,item,compact=false){
+  const texture=item?.assetTexture||"/assets/textures/cardboard_box_01_diff_1k.jpg";
+  const hasModel=type==="packaging"&&item?.assetModel;
+  return `<span class="asset-thumb asset-${type} ${compact?"compact":""}"><img src="${esc(texture)}" alt="" loading="lazy"><i aria-hidden="true"></i>${hasModel?'<small>GLB · CC0</small>':`<small>${item?.assetLicense||"CC0"}</small>`}</span>`;
+}
+
+function choicePreview(type,item){
+  if(!item) return "";
+  return `<article class="choice-preview ${type}-${esc(item.id)}">${assetThumb(type,item)}<div><span class="eyebrow">${type==="cards"?"Thiệp đang chọn":"Ruy băng đang chọn"}</span><strong>${esc(item.name)}</strong><small>Ảnh chất liệu CC0 đã lưu trong website</small></div></article>`;
+}
 
 function shell(content){
   const p=currentPath();
@@ -303,8 +324,8 @@ function builderPage(){
 }
 function builderStep(){ const b=state.builder,t=builderTotals();
   if(b.step===1) return `<div class="row spaced wrap"><div><h2>Chọn những món bạn muốn gửi</h2><p class="muted">Không cần chọn đủ mọi nhóm.</p></div><div class="field" style="margin:0"><label for="builder-budget">Ngân sách hộp</label><input id="builder-budget" type="number" min="100000" step="50000" value="${b.budget}" style="max-width:180px"></div></div>${t.total>b.budget?`<p class="notice error">Đang vượt ngân sách ${money(t.total-b.budget)}. Chúng mình không tự xóa món của bạn.</p>`:`<p class="notice">Còn khoảng ${money(b.budget-t.total)} trong ngân sách.</p>`}<div class="item-list">${giftItems.map(i=>{const n=b.items[i.id]||0; return `<article class="item-row"><div class="item-art">${i.name}</div><h3>${i.name}</h3><span class="small muted">${i.category} · ${i.size} đơn vị</span><br><span class="price small">${money(i.price)}</span>${i.stock===0?'<p class="small muted">Tạm hết hàng</p>':`<div class="qty"><button aria-label="Giảm ${esc(i.name)}" data-action="builder-qty" data-id="${i.id}" data-delta="-1">−</button><span>${n}</span><button aria-label="Thêm ${esc(i.name)}" data-action="builder-qty" data-id="${i.id}" data-delta="1">+</button></div>`}${i.lead>2?`<p class="fine-print">Cần ${i.lead} ngày chuẩn bị</p>`:""}</article>`}).join("")}</div><div class="row spaced" style="margin-top:34px"><button class="button secondary" data-action="save-draft">Lưu bản nháp</button><button class="button" data-action="builder-next" ${t.lines.length?"":"disabled"}>Chọn hộp</button></div>`;
-  if(b.step===2) return `<h2>Chọn hộp phù hợp</h2><p class="muted">Bạn đã chọn ${t.size} đơn vị dung lượng. Phương án không đủ chỗ sẽ bị khóa.</p><div class="package-list">${packaging.map(p=>{const ok=p.capacity>=t.size; return `<label class="package-option ${ok?"":"disabled"}"><input type="radio" name="package" value="${p.id}" ${b.packaging===p.id?"checked":""} ${ok?"":"disabled"}><span><strong>${p.name}</strong><br><span class="small muted">Tối đa ${p.capacity} đơn vị · ${p.color}${ok?"":" · Không đủ dung lượng"}</span></span><span class="price">${money(p.price)}</span></label>`}).join("")}</div><div class="row spaced" style="margin-top:30px"><button class="button ghost" data-action="builder-back">Quay lại chọn món</button><button class="button" data-action="builder-next" ${b.packaging?"":"disabled"}>Thiệp & trang trí</button></div>`;
-  if(b.step===3) return `<h2>Viết điều bạn muốn gửi</h2><div class="form-grid"><div class="field"><label for="b-card">Mẫu thiệp</label><select id="b-card">${cards.map(x=>`<option value="${x.id}" ${b.card===x.id?"selected":""}>${x.name} ${x.price?"+ "+money(x.price):"· đã gồm"}</option>`).join("")}</select></div><div class="field"><label for="b-ribbon">Ruy băng</label><select id="b-ribbon">${ribbons.map(x=>`<option value="${x.id}" ${b.ribbon===x.id?"selected":""}>${x.name} ${x.price?"+ "+money(x.price):"· đã gồm"}</option>`).join("")}</select></div><div class="field"><label for="b-recipient">Tên người nhận</label><input id="b-recipient" maxlength="40" value="${esc(b.recipient)}"></div><div class="field"><label for="b-sender">Tên người gửi</label><input id="b-sender" maxlength="40" value="${esc(b.sender)}" ${b.anonymous?"disabled":""}></div></div><label class="checkline"><input id="b-anonymous" type="checkbox" ${b.anonymous?"checked":""}> Không ghi tên người gửi trên thiệp</label><div class="field"><label for="b-message">Lời chúc <span class="muted">(${b.message.length}/250)</span></label><textarea id="b-message" maxlength="250">${esc(b.message)}</textarea></div><div class="card-preview">${b.message?esc(b.message):"Lời chúc của bạn sẽ hiện ở đây."}</div><p class="fine-print">Shop vẫn cần thông tin người mua để xử lý đơn. Bản xem trước chỉ mô phỏng bố cục.</p><div class="row spaced"><button class="button ghost" data-action="builder-back">Quay lại chọn hộp</button><button class="button" data-action="builder-next">Xem lại</button></div>`;
+  if(b.step===2) return `<h2>Chọn hộp phù hợp</h2><p class="muted">Bạn đã chọn ${t.size} đơn vị dung lượng. Phương án không đủ chỗ sẽ bị khóa.</p><div class="asset-source-note"><span>✓</span><div><strong>Mẫu bao bì 3D đã có sẵn</strong><small>Ba mẫu GLB CC0 được lưu trực tiếp trong website để người bán thay ảnh hoặc đổi mẫu sau.</small></div></div><div class="package-list">${packaging.map(p=>{const ok=p.capacity>=t.size; return `<label class="package-option ${ok?"":"disabled"}"><input type="radio" name="package" value="${p.id}" ${b.packaging===p.id?"checked":""} ${ok?"":"disabled"}>${assetThumb("packaging",p)}<span><strong>${p.name}</strong><br><span class="small muted">Tối đa ${p.capacity} đơn vị · ${p.color}${ok?"":" · Không đủ dung lượng"}</span></span><span class="price">${money(p.price)}</span></label>`}).join("")}</div><div class="row spaced" style="margin-top:30px"><button class="button ghost" data-action="builder-back">Quay lại chọn món</button><button class="button" data-action="builder-next" ${b.packaging?"":"disabled"}>Thiệp & trang trí</button></div>`;
+  if(b.step===3){const selectedCard=cards.find(x=>x.id===b.card),selectedRibbon=ribbons.find(x=>x.id===b.ribbon);return `<h2>Viết điều bạn muốn gửi</h2><div class="choice-preview-grid">${choicePreview("cards",selectedCard)}${choicePreview("ribbons",selectedRibbon)}</div><div class="form-grid"><div class="field"><label for="b-card">Mẫu thiệp</label><select id="b-card">${cards.map(x=>`<option value="${x.id}" ${b.card===x.id?"selected":""}>${x.name} ${x.price?"+ "+money(x.price):"· đã gồm"}</option>`).join("")}</select></div><div class="field"><label for="b-ribbon">Ruy băng</label><select id="b-ribbon">${ribbons.map(x=>`<option value="${x.id}" ${b.ribbon===x.id?"selected":""}>${x.name} ${x.price?"+ "+money(x.price):"· đã gồm"}</option>`).join("")}</select></div><div class="field"><label for="b-recipient">Tên người nhận</label><input id="b-recipient" maxlength="40" value="${esc(b.recipient)}"></div><div class="field"><label for="b-sender">Tên người gửi</label><input id="b-sender" maxlength="40" value="${esc(b.sender)}" ${b.anonymous?"disabled":""}></div></div><label class="checkline"><input id="b-anonymous" type="checkbox" ${b.anonymous?"checked":""}> Không ghi tên người gửi trên thiệp</label><div class="field"><label for="b-message">Lời chúc <span class="muted">(${b.message.length}/250)</span></label><textarea id="b-message" maxlength="250">${esc(b.message)}</textarea></div><div class="card-preview card-style-${esc(b.card)}">${b.message?esc(b.message):"Lời chúc của bạn sẽ hiện ở đây."}</div><p class="fine-print">Shop vẫn cần thông tin người mua để xử lý đơn. Bản xem trước chỉ mô phỏng bố cục.</p><div class="row spaced"><button class="button ghost" data-action="builder-back">Quay lại chọn hộp</button><button class="button" data-action="builder-next">Xem lại</button></div>`;}
   return `<h2>Kiểm tra lựa chọn trước khi xếp</h2><p class="muted">Bước tiếp theo sẽ tạo một vật thể 3D riêng cho từng đơn vị sản phẩm bạn đã chọn.</p><div class="summary-lines">${t.lines.map(l=>`<div class="summary-line"><span>${l.qty} × ${l.item.name}</span><span>${money(l.item.price*l.qty)}</span></div>`).join("")}<div class="summary-line"><span>${t.pack?.name||"Chưa chọn hộp"}</span><span>${money(t.pack?.price||0)}</span></div><div class="summary-line"><span>${t.card?.name}</span><span>${money(t.card?.price||0)}</span></div><div class="summary-line"><span>${t.ribbon?.name}</span><span>${money(t.ribbon?.price||0)}</span></div></div><div class="card-preview">${b.message?esc(b.message):"Thiệp chưa có lời chúc"}</div><div class="field" style="margin-top:24px"><label for="draft-name">Tên hộp để dễ tìm lại</label><input id="draft-name" maxlength="60" value="${esc(b.draftName)}"></div><div class="notice">Bố cục 3D sẽ được lưu cùng hộp, giỏ hàng và đơn để shop xem lại khi đóng gói.</div><div class="row spaced wrap" style="margin-top:24px"><button class="button secondary" data-action="save-draft">Lưu bản nháp</button><div class="row"><button class="button ghost" data-action="builder-back">Sửa thiệp</button><button class="button" data-action="open-pack3d">Xếp trong hộp 3D →</button></div></div>`;
 }
 
@@ -423,9 +444,9 @@ function adminInventory(){
 }
 
 function adminOptions(){
-  const renderGroup=(type,title,items)=>`<section class="admin-card ${type==="packaging"?"admin-card-wide":""}"><div class="row spaced"><h2>${title}</h2><span class="muted small">Đồng bộ ngay vào Builder</span></div><div class="option-list">${items.map(x=>`<div class="admin-list-row"><div><strong>${esc(x.name)}</strong><span>${money(x.price)}${x.capacity?` · sức chứa ${x.capacity}`:""}${type==="packaging"&&x.innerLength?` · lòng ${x.innerLength} × ${x.innerWidth} × ${x.innerHeight} mm · tối đa ${x.maxWeight} g`:""}</span></div><button class="link" data-action="toggle-option" data-type="${type}" data-id="${x.id}">${x.active===false?"Bật lại":"Tạm ẩn"}</button></div>`).join("")}</div><form class="option-form ${type==="packaging"?"packaging-option-form":""}" data-type="${type}"><input name="name" required placeholder="Tên tùy chọn"><input name="price" type="number" min="0" required placeholder="Giá"><input name="capacity" type="number" min="1" placeholder="Sức chứa">${type==="packaging"?'<input name="innerLength" type="number" min="50" required placeholder="Dài lòng (mm)"><input name="innerWidth" type="number" min="50" required placeholder="Rộng lòng (mm)"><input name="innerHeight" type="number" min="30" required placeholder="Cao lòng (mm)"><input name="maxWeight" type="number" min="100" required placeholder="Tải tối đa (g)">':""}<button class="button small-btn">+ Thêm</button></form></section>`;
-  const materials=`<section class="admin-card admin-card-wide"><div class="row spaced"><div><h2>Vật liệu chèn lót 3D</h2><p class="muted small">Độ dày thực tế được trừ khỏi không gian hữu dụng.</p></div></div>${state.admin.materials3d.map(x=>`<div class="admin-list-row"><div><strong>${esc(x.name)}</strong><span>${money(x.price)} · dày ${x.thickness} mm · ${x.support?"có thể làm lớp đỡ":"chỉ trang trí/đệm"}</span></div><button class="link" data-action="toggle-material3d" data-id="${x.id}">${x.active===false?"Bật lại":"Tạm ẩn"}</button></div>`).join("")}</section>`;
-  return adminShell("Tùy chọn hộp","options",`<div class="admin-grid">${renderGroup("packaging","Hộp & bao bì 3D",state.admin.packaging)}${materials}${renderGroup("cards","Thiệp",state.admin.cards)}${renderGroup("ribbons","Ruy băng",state.admin.ribbons)}</div>`);
+  const renderGroup=(type,title,items)=>`<section class="admin-card ${type==="packaging"?"admin-card-wide":""}"><div class="row spaced"><h2>${title}</h2><span class="muted small">Đồng bộ ngay vào Builder</span></div><div class="option-list">${items.map(x=>`<div class="admin-list-row with-asset">${assetThumb(type,x,true)}<div><strong>${esc(x.name)}</strong><span>${money(x.price)}${x.capacity?` · sức chứa ${x.capacity}`:""}${type==="packaging"&&x.innerLength?` · lòng ${x.innerLength} × ${x.innerWidth} × ${x.innerHeight} mm · tối đa ${x.maxWeight} g`:""}</span>${x.assetModel?`<span class="asset-file">${esc(x.assetModel.split("/").pop())}</span>`:""}</div><button class="link" data-action="toggle-option" data-type="${type}" data-id="${x.id}">${x.active===false?"Bật lại":"Tạm ẩn"}</button></div>`).join("")}</div><form class="option-form ${type==="packaging"?"packaging-option-form":""}" data-type="${type}"><input name="name" required placeholder="Tên tùy chọn"><input name="price" type="number" min="0" required placeholder="Giá"><input name="capacity" type="number" min="1" placeholder="Sức chứa">${type==="packaging"?'<input name="innerLength" type="number" min="50" required placeholder="Dài lòng (mm)"><input name="innerWidth" type="number" min="50" required placeholder="Rộng lòng (mm)"><input name="innerHeight" type="number" min="30" required placeholder="Cao lòng (mm)"><input name="maxWeight" type="number" min="100" required placeholder="Tải tối đa (g)">':""}<button class="button small-btn">+ Thêm</button></form></section>`;
+  const materials=`<section class="admin-card admin-card-wide"><div class="row spaced"><div><h2>Vật liệu chèn lót 3D</h2><p class="muted small">Độ dày thực tế được trừ khỏi không gian hữu dụng.</p></div></div>${state.admin.materials3d.map(x=>`<div class="admin-list-row with-asset">${assetThumb("materials",x,true)}<div><strong>${esc(x.name)}</strong><span>${money(x.price)} · dày ${x.thickness} mm · ${x.support?"có thể làm lớp đỡ":"chỉ trang trí/đệm"}</span></div><button class="link" data-action="toggle-material3d" data-id="${x.id}">${x.active===false?"Bật lại":"Tạm ẩn"}</button></div>`).join("")}</section>`;
+  return adminShell("Tùy chọn hộp","options",`<div class="asset-source-note admin-asset-note"><span>CC0</span><div><strong>Thư viện mẫu đã lưu cục bộ</strong><small>Hộp quà GLB từ Kenney Holiday Kit; chất liệu carton và vải từ Poly Haven. Có thể thay bằng ảnh/mô hình thật của shop sau.</small></div></div><div class="admin-grid">${renderGroup("packaging","Hộp & bao bì 3D",state.admin.packaging)}${materials}${renderGroup("cards","Thiệp",state.admin.cards)}${renderGroup("ribbons","Ruy băng",state.admin.ribbons)}</div>`);
 }
 
 function orderDetail(order){
