@@ -724,20 +724,21 @@ async function referenceImageData(url){
   return {mimeType:blob.type||"image/jpeg",data};
 }
 
-function resizeImageToBlob(imageDataUrl, maxSide = 512){
+function resizeImageToBlob(imageDataUrl, maxSide = 500){
   return new Promise((resolve,reject)=>{
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
       let width = img.naturalWidth || img.width;
       let height = img.naturalHeight || img.height;
-      if (width > maxSide || height > maxSide) {
+      const safeMaxSide=Math.min(500,Math.max(64,Number(maxSide)||500));
+      if (width > safeMaxSide || height > safeMaxSide) {
         if (width >= height) {
-          height = Math.round((height * maxSide) / width);
-          width = maxSide;
+          height = Math.round((height * safeMaxSide) / width);
+          width = safeMaxSide;
         } else {
-          width = Math.round((width * maxSide) / height);
-          height = maxSide;
+          width = Math.round((width * safeMaxSide) / height);
+          height = safeMaxSide;
         }
       }
       const canvas = document.createElement("canvas");
@@ -1037,14 +1038,33 @@ FINAL COMPLIANCE CHECK BEFORE RENDERING:
 Output the final photograph only.`;
 }
 
-function stableLayoutSeed(layout,box){const input=JSON.stringify({box:box.id,items:layout.configuration.instances.map(x=>[x.productId,Math.round(x.x),Math.round(x.z),Math.round(x.rotY||0)]),materials:state.builder.materials});let hash=2166136261;for(let i=0;i<input.length;i++){hash^=input.charCodeAt(i);hash=Math.imul(hash,16777619);}return Math.abs(hash>>>0)||1;}
+function stableLayoutSeed(layout,box){const input=JSON.stringify({box:box.id,items:layout.configuration.instances.map(x=>[x.productId,Math.round(x.x),Math.round(x.z),Math.round(x.rotY||0)]),materials:state.builder.materials});let hash=2166136261;for(let i=0;i<input.length;i++){hash^=input.charCodeAt(i);hash=Math.imul(hash,16777619);}return Math.max(1,(hash>>>0)&0x7fffffff);}
 
 function packingImagePrompt(layout,t,activeRefs=[]){return buildFluxImagePrompt(layout,{box:t.pack,lines:t.lines,card:t.card,ribbon:t.ribbon},activeRefs);}
 
 function generatedImageSource(payload){
   const parts=payload?.candidates?.[0]?.content?.parts||[],part=parts.find(x=>x?.inlineData?.data||x?.inline_data?.data),inline=part?.inlineData||part?.inline_data;
   if(inline?.data)return `data:${inline.mimeType||inline.mime_type||"image/png"};base64,${inline.data}`;
-  const openAi=payload?.data?.[0];if(openAi?.b64_json)return `data:image/png;base64,${openAi.b64_json}`;return openAi?.url||"";
+  const direct=payload?.image||payload?.result?.image||payload?.data?.image;
+  if(typeof direct==="string"&&direct)return direct.startsWith("data:")?direct:`data:image/png;base64,${direct}`;
+  const openAi=payload?.data?.[0];if(openAi?.b64_json)return `data:image/png;base64,${openAi.b64_json}`;return openAi?.url||payload?.url||"";
+}
+function imageApiError(payload,text,status){
+  const nested=payload?.error?.message||payload?.error?.details,flat=typeof payload?.error==="string"?payload.error:"",errors=Array.isArray(payload?.errors)?payload.errors.map(x=>x?.message||x).filter(Boolean).join(" · "):"";
+  return String(nested||flat||payload?.details||payload?.message||errors||text||`Cloudflare Worker trả mã lỗi ${status}`).slice(0,700);
+}
+async function readImageApiResponse(response){
+  const contentType=String(response.headers.get("content-type")||"").toLowerCase();
+  if(response.ok&&contentType.startsWith("image/")){
+    const blob=await response.blob(),base64=await blobBase64(blob);
+    return {source:`data:${blob.type||contentType.split(";")[0]||"image/png"};base64,${base64}`,payload:null};
+  }
+  const text=await response.text();let payload={};
+  try{payload=text?JSON.parse(text):{};}catch{payload={};}
+  if(!response.ok)throw new Error(imageApiError(payload,text,response.status));
+  const source=generatedImageSource(payload);
+  if(!source)throw new Error(payload?.error||payload?.details||payload?.message||"Worker trả thành công nhưng không có trường ảnh được hỗ trợ (image, result.image hoặc data[0].b64_json).");
+  return {source,payload};
 }
 
 async function runGiftBoxAiPipeline(){
@@ -1217,7 +1237,7 @@ async function runGiftBoxAiPipeline(){
         for (let i = 0; i < activeRefs.length; i++) {
           const line = activeRefs[i];
           const dataUrl = mainProductImage(line.item);
-          const blob = await resizeImageToBlob(dataUrl, 512);
+          const blob = await resizeImageToBlob(dataUrl, 500);
           formData.append(`input_image_${i}`, blob, `product_${i}.png`);
         }
 
@@ -1229,18 +1249,14 @@ async function runGiftBoxAiPipeline(){
           body: formData
         });
 
-        const imagePayload = await imageResponse.json().catch(() => ({}));
-        if (!imageResponse.ok) throw new Error(imagePayload?.error?.message || `Cloudflare Worker trả mã lỗi ${imageResponse.status}`);
-        
-        const b64 = imagePayload?.data?.[0]?.b64_json;
-        if (!b64) throw new Error("Cloudflare Worker không trả về chuỗi ảnh data[0].b64_json.");
-        
-        aiPackingImage = `data:image/png;base64,${b64}`;
+        const imageResult=await readImageApiResponse(imageResponse);
+        aiPackingImage = imageResult.source;
         aiPackingImageMeta = {
           model: ai.imageModel || "@cf/black-forest-labs/flux-2-klein-4b",
           provider: "Cloudflare Workers AI",
           createdAt: new Date().toISOString(),
           referenceCount: activeRefs.length,
+          referenceMaxSidePx: 500,
           seed: stableLayoutSeed(validatedLayout,t.pack),
           camera: "top-down-90"
         };
