@@ -272,6 +272,7 @@ button { cursor: pointer; }
 .ai-rule-card strong { margin-bottom: 3px; font-family: var(--serif); font-size: 1.08rem; }
 .ai-rule-card span { color: #31532d; font-size: .75rem; font-weight: 600; }
 .ai-api-note { display: grid; grid-template-columns: 44px minmax(0,1fr) auto; gap: 15px; align-items: center; margin-bottom: 24px; padding: 16px 18px; border: 1px solid #d8cfc5; background: rgba(255,253,250,.88); }
+.ai-api-note.connected { border-color: #a8b59d; background: #f4f7f0; box-shadow: inset 3px 0 #31532d; }
 .ai-api-note > span { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--wine); color: white; font-size: .72rem; font-weight: 700; }
 .ai-api-note strong { display: block; font-size: .86rem; }
 .ai-api-note p { margin: 2px 0 0; color: var(--muted); font-size: .71rem; line-height: 1.5; }
@@ -298,6 +299,9 @@ button { cursor: pointer; }
 .face-up-rule { display: grid; gap: 3px; margin-top: 10px; padding: 12px 14px; border-left: 3px solid #31532d; background: var(--sage); }
 .face-up-rule b { color: #31532d; font-size: .78rem; }
 .face-up-rule span { color: var(--muted); font-size: .68rem; }
+.ai-config-card { border-top: 4px solid var(--wine); }
+.ai-config-card .status { white-space: nowrap; }
+.ai-prompt-field { min-height: 420px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .76rem; line-height: 1.55; tab-size: 2; }
 
 .packing-page { padding: 30px 0 0; background: var(--paper); }
 .packing-progress { width: min(calc(100% - 40px), var(--max)); margin: 0 auto 22px; }
