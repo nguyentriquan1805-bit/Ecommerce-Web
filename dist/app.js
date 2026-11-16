@@ -131,27 +131,73 @@ YÊU CẦU
 CHỈ TRẢ VỀ JSON HỢP LỆ, KHÔNG THÊM MARKDOWN:
 {"recommendations":[{"boxId":"box-01","reason":"Phù hợp vì..."},{"boxId":"box-02","reason":"Phù hợp vì..."},{"boxId":"box-03","reason":"Phù hợp vì..."},{"boxId":"box-04","reason":"Phù hợp vì..."},{"boxId":"box-05","reason":"Phù hợp vì..."}]}`;
 
-const DEFAULT_AI_PACKING_PROMPT=`Bạn là chuyên gia xếp hộp quà cao cấp. Nhiệm vụ của bạn là tạo đúng 1 phương án xếp tốt nhất từ dữ liệu hộp, vật liệu chèn lót, ảnh mặt chính và kích thước thật của sản phẩm.
+const TEXT_MODEL_PACKING_PROMPT=`Bạn là kỹ sư bố trí hộp quà. Hãy tạo đúng một phương án xếp sản phẩm dựa trên kích thước millimet thật.
 
-QUY ƯỚC HÌNH HỌC
-- Đơn vị chiều dài là millimet, khối lượng là gram.
-- Trục X là chiều dài hộp; trục Z là chiều rộng hộp; trục Y là chiều cao tính từ đáy lòng hộp.
-- Tọa độ gốc nằm tại tâm đáy lòng hộp.
-- Mọi vị trí phải tính cả padding, giấy lót, sợi giấy, mút, giấy phủ trên cùng và vách ngăn.
+Quy tắc bắt buộc:
 
-RÀNG BUỘC BẮT BUỘC
-1. Giữ nguyên chính xác productId và số lượng của từng sản phẩm. Không thêm, xóa, nhân đôi, thay thế hoặc thu nhỏ sản phẩm.
-2. Mọi sản phẩm phải nằm hoàn toàn trong lòng hộp, không xuyên thành, không giao nhau, không lơ lửng và không vượt quá chiều cao cho phép.
-3. Phải còn đủ khoảng trống để đóng nắp sau khi tính vật liệu phủ trên cùng và lidClearance.
-4. Món nặng ưu tiên gần đáy và gần tâm. Món dễ vỡ không được chịu tải của món khác.
-5. QUY TẮC TUYỆT ĐỐI: ảnh/mặt chính của mọi sản phẩm luôn hướng lên phía người mở hộp. Chỉ được xoay trên mặt phẳng ngang theo 0 hoặc 90 độ. Không được lật úp, dựng nghiêng hay quay mặt chính sang bên.
-6. Chọn một bố cục cân đối, an toàn, đẹp khi mở hộp và tiết kiệm khoảng trống.
-7. Nếu dữ liệu không thể xếp hợp lệ, trả status="impossible" và nêu lý do. Tuyệt đối không bịa một bố cục đẹp nhưng không thể đóng hộp.
+1. Giữ chính xác productId và số lượng.
+2. Không thêm, bỏ, thay thế hoặc nhân đôi sản phẩm.
+3. Mọi sản phẩm phải nằm hoàn toàn trong lòng hộp.
+4. Các khối sản phẩm không được giao nhau.
+5. Phải tính độ dày của giấy lót và vật liệu chèn.
+6. Phải còn đủ khoảng trống để đóng nắp.
+7. Mặt chính của tất cả sản phẩm phải hướng lên.
+8. Chỉ xoay sản phẩm trên mặt đáy theo 0 hoặc 90 độ.
+9. Không lật úp, dựng nghiêng hoặc thu nhỏ sản phẩm.
+10. Món nặng ưu tiên gần tâm và gần đáy.
+11. Món dễ vỡ không được chịu tải.
+12. Nếu không thể xếp hợp lệ, trả status="impossible".
 
-CHỈ TRẢ VỀ JSON HỢP LỆ, KHÔNG THÊM MARKDOWN:
-{"status":"ok","layout":{"strategy":"premium","placements":[{"productId":"id-san-pham","quantityIndex":0,"x":0,"y":25,"z":0,"rotationY":0,"labelFacing":"up","supportedBy":null}],"lidClearanceMm":20}}
+Chỉ trả JSON hợp lệ, không thêm Markdown hoặc lời giải thích bên ngoài JSON.
 
-Mỗi placements phải chứa đúng một bản ghi cho từng đơn vị sản phẩm. quantityIndex bắt đầu từ 0 trong từng productId.`;
+Định dạng bắt buộc:
+
+{
+  "status": "ok",
+  "layout": {
+    "strategy": "balanced",
+    "placements": [
+      {
+        "productId": "product-id",
+        "quantityIndex": 0,
+        "xMm": 0,
+        "zMm": 0,
+        "rotationYDeg": 0,
+        "mainFace": "up"
+      }
+    ],
+    "packingOrder": [
+      {
+        "productId": "product-id",
+        "quantityIndex": 0,
+        "order": 1
+      }
+    ],
+    "estimatedLidClearanceMm": 20
+  }
+}
+
+Nếu không thể xếp:
+
+{
+  "status": "impossible",
+  "reason": "..."
+}`;
+
+const TEXT_MODEL_REPAIR_PROMPT=`Phương án trước không vượt qua kiểm tra hình học của hệ thống.
+
+Các lỗi chính xác:
+{{VALIDATION_ERRORS}}
+
+Dữ liệu hộp và sản phẩm:
+{{INPUT_DATA}}
+
+Phương án cũ:
+{{INVALID_LAYOUT}}
+
+Hãy sửa đúng một phương án. Không thay đổi sản phẩm, số lượng hoặc kích thước. Chỉ trả JSON theo schema đã yêu cầu.`;
+
+const DEFAULT_AI_PACKING_PROMPT=TEXT_MODEL_PACKING_PROMPT;
 
 const DEFAULT_AI_IMAGE_PROMPT=`Tạo đúng 1 ẢNH CHỤP SẢN PHẨM HOÀN THIỆN của hộp quà đang mở, nhìn từ trên xuống hơi chếch nhẹ, phong cách thương mại điện tử cao cấp, ánh sáng studio mềm và chất liệu chân thật.
 
@@ -190,7 +236,8 @@ function loadState(){
   catch { return structuredClone(DEFAULT_STATE); }
 }
 let state = loadState();
-let aiSessionKey="", aiRequestBusy=false, aiFinderBusy=false, aiFinderImages={}, aiPackingImage="", aiPackingImageBusy=false, aiPackingImageMeta=null;
+let aiSessionKey="", aiImageSessionKey="", aiRequestBusy=false, aiFinderBusy=false, aiFinderImages={}, aiPackingImage="", aiPackingImageBusy=false, aiPackingImageMeta=null;
+let aiPipelineProgress = { active: false, step: "idle", stepNumber: 0, message: "", repairAttempt: 0, maxRepairs: 2, errors: [], source: "" };
 function clearPackingImage(){aiPackingImage="";aiPackingImageMeta=null;}
 function save(){
   try { localStorage.setItem("goiThuongState", JSON.stringify(state)); return true; }
@@ -247,15 +294,25 @@ function ensureAdminState(){
   if(!state.admin.delivery?.slots?.length) state.admin.delivery={zone:"TP.HCM",fee:45000,capacity:12,slots:[{id:"morning",label:"9–12h",active:true,full:false},{id:"afternoon",label:"14–17h",active:true,full:true},{id:"evening",label:"18–21h",active:true,full:false}],holidays:""};
   const savedAi=state.admin.ai||{}, legacyPrompt=String(savedAi.packingPrompt||savedAi.prompt||"");
   state.admin.ai={
-    enabled:false,endpoint:"",model:"",imageEndpoint:"",imageModel:"",imageSize:"1536x1024",imagePromptVersion:2,
+    enabled:true,endpoint:"",model:"",imageProvider:"cloudflare",imageEndpoint:"https://goithuong-ai-image.nguyentriquan1805.workers.dev/",imageModel:"@cf/black-forest-labs/flux-2-klein-4b",imageSize:"1024x768",imagePromptVersion:3,
+    temperature:0.15,
     recommendationPrompt:DEFAULT_AI_RECOMMENDATION_PROMPT,
-    packingPrompt:legacyPrompt&& !/đúng 5 phương án|five layouts|năm phương án/i.test(legacyPrompt)?legacyPrompt:DEFAULT_AI_PACKING_PROMPT,
+    textModelPrompt:TEXT_MODEL_PACKING_PROMPT,
+    repairPrompt:TEXT_MODEL_REPAIR_PROMPT,
+    packingPrompt:TEXT_MODEL_PACKING_PROMPT,
     imagePrompt:DEFAULT_AI_IMAGE_PROMPT,
     ...savedAi,
   };
+  if(!state.admin.ai.imageProvider) state.admin.ai.imageProvider="cloudflare";
+  if(!state.admin.ai.imageEndpoint) state.admin.ai.imageEndpoint="https://goithuong-ai-image.nguyentriquan1805.workers.dev/";
+  if(!state.admin.ai.imageModel) state.admin.ai.imageModel="@cf/black-forest-labs/flux-2-klein-4b";
+  if(!state.admin.ai.textModelPrompt) state.admin.ai.textModelPrompt=TEXT_MODEL_PACKING_PROMPT;
+  if(!state.admin.ai.repairPrompt) state.admin.ai.repairPrompt=TEXT_MODEL_REPAIR_PROMPT;
+  if(state.admin.ai.temperature===undefined) state.admin.ai.temperature=0.15;
+  state.admin.ai.enabled=true;
   if(!state.admin.ai.recommendationPrompt)state.admin.ai.recommendationPrompt=DEFAULT_AI_RECOMMENDATION_PROMPT;
-  if(!state.admin.ai.packingPrompt||/đúng 5 phương án|five layouts|năm phương án/i.test(state.admin.ai.packingPrompt))state.admin.ai.packingPrompt=DEFAULT_AI_PACKING_PROMPT;
-  if(!state.admin.ai.imagePrompt||Number(savedAi.imagePromptVersion||0)<2){state.admin.ai.imagePrompt=DEFAULT_AI_IMAGE_PROMPT;state.admin.ai.imagePromptVersion=2;}
+  if(!state.admin.ai.packingPrompt||/đúng 5 phương án|five layouts|năm phương án/i.test(state.admin.ai.packingPrompt))state.admin.ai.packingPrompt=TEXT_MODEL_PACKING_PROMPT;
+  if(!state.admin.ai.imagePrompt||Number(savedAi.imagePromptVersion||0)<2){state.admin.ai.imagePrompt=DEFAULT_AI_IMAGE_PROMPT;state.admin.ai.imagePromptVersion=3;}
   if(!Array.isArray(state.admin.aiReferences))state.admin.aiReferences=[];
   state.finder={...structuredClone(DEFAULT_STATE.finder),...(state.finder||{})};
   if(state.user&&!state.user.role) state.user.role=ADMIN_ROLES[state.user.email]?.role||"customer";
@@ -607,30 +664,8 @@ function apiLayoutFromResult(raw,index,box,lines){
   cfg.selectedId=null;cfg.updatedAt=new Date().toISOString();const report=validatePackingConfiguration(cfg,box,lines);if(!report.valid)return null;
   return {id:`api-${style.id}-${Date.now()}-${index}`,strategy:style.id,name:style.name,description:style.description,badge:style.badge,faceRule:"Mặt chính luôn hướng lên",source:"api",configuration:cfg,report,generatedAt:new Date().toISOString()};
 }
-async function requestAiPackingLayouts(){
-  const settings=state.admin.ai||{},t=builderTotals();
-  if(aiRequestBusy)return;
-  if(!settings.enabled||!settings.endpoint||!settings.model||!aiSessionKey)return toast("Hãy vào Quản trị → Cài đặt để nhập API URL, model và API key cho phiên này.");
-  if(!t.lines.length||!t.pack)return toast("Chưa có đủ món và hộp để gửi cho AI.");
-  aiRequestBusy=true;render();
-  try{
-    const input=aiPromptInput(t.pack,t.lines),textInput=structuredClone(input),imageBlocks=[];
-    textInput.products.forEach(product=>{const image=product.mainImage;product.mainImage=image?"Ảnh chính được gửi ở nội dung đa phương thức":"Không có ảnh";if(image){imageBlocks.push({type:"text",text:`Ảnh mặt chính của productId=${product.productId}; mặt này phải hướng lên.`},{type:"image_url",image_url:{url:image}});}});
-    (state.admin.aiReferences||[]).filter(x=>x.active!==false&&x.data).slice(0,4).forEach(reference=>imageBlocks.push({type:"text",text:`Ảnh tham khảo bố cục: ${reference.title}; dịp ${reference.occasion||"khác"}; phong cách ${reference.style||"khác"}; chỉ học cách trình bày, không sao chép hoặc thêm sản phẩm.`},{type:"image_url",image_url:{url:reference.data}}));
-    const userContent=[{type:"text",text:`DỮ LIỆU ĐẦU VÀO:\n${JSON.stringify(textInput)}`}].concat(imageBlocks);
-    const response=await fetch(settings.endpoint,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${aiSessionKey}`},body:JSON.stringify({model:settings.model,temperature:.15,response_format:{type:"json_object"},messages:[{role:"system",content:settings.packingPrompt||AI_PACKING_SYSTEM_PROMPT},{role:"user",content:userContent}]})});
-    const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload?.error?.message||`API trả mã ${response.status}`);
-    const parsed=parseAiJson(apiContent(payload));if(parsed.status==="impossible")throw new Error(parsed.reason||"AI cho biết các món không thể xếp vào hộp này.");
-    const rawLayouts=parsed.layout?[parsed.layout]:(Array.isArray(parsed.layouts)?parsed.layouts.slice(0,1):[]),valid=rawLayouts.map((layout,index)=>apiLayoutFromResult(layout,index,t.pack,t.lines)).filter(Boolean);
-    if(!valid.length)throw new Error("API chưa trả phương án nào vượt qua kiểm tra kích thước.");
-    const layouts=[valid[0]];
-    state.builder.aiLayouts=layouts;state.builder.aiLayoutId=layouts[0]?.id||null;state.builder.aiLayoutSignature=JSON.stringify({version:"face-up-single-1",box:t.pack.id,items:t.lines.map(x=>[x.item.id,x.qty]),materials:state.builder.materials,seed:state.builder.aiSeed||1});
-    state.builder.aiSource={type:"api",model:settings.model,validFromApi:1,generatedAt:new Date().toISOString()};state.builder.aiError="";clearPackingImage();save();render();toast("Đã kiểm tra xong bố cục theo kích thước thật.");
-    if(settings.imageEndpoint&&settings.imageModel)await requestAiPackingFinalImage();
-  }catch(error){state.builder.aiError=String(error?.message||"Không gọi được API AI.");save();render();toast(state.builder.aiError);}
-  finally{aiRequestBusy=false;render();}
-}
 function mainProductImage(item){return item?.images?.find(x=>x.cover)?.data||item?.images?.[0]?.data||item?.model3d?.textureData||"";}
+function isCloudflareWorkerEndpoint(endpoint){return /workers\.dev/i.test(String(endpoint||""));}
 function isGeminiImageEndpoint(endpoint){return /generativelanguage\.googleapis\.com\/.+:generateContent(?:\?|$)/i.test(String(endpoint||""));}
 function blobBase64(blob){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||"").split(",")[1]||"");reader.onerror=()=>reject(new Error("Không đọc được ảnh tham chiếu."));reader.readAsDataURL(blob);});}
 async function referenceImageData(url){
@@ -638,41 +673,587 @@ async function referenceImageData(url){
   const blob=await response.blob(),data=await blobBase64(blob);if(!data)throw new Error("Ảnh sản phẩm không có dữ liệu.");
   return {mimeType:blob.type||"image/jpeg",data};
 }
+
+function resizeImageToBlob(imageDataUrl, maxSide = 512){
+  return new Promise((resolve,reject)=>{
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      let width = img.naturalWidth || img.width;
+      let height = img.naturalHeight || img.height;
+      if (width > maxSide || height > maxSide) {
+        if (width >= height) {
+          height = Math.round((height * maxSide) / width);
+          width = maxSide;
+        } else {
+          width = Math.round((width * maxSide) / height);
+          height = maxSide;
+        }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, width);
+      canvas.height = Math.max(1, height);
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(blob => {
+        if (blob) resolve(blob);
+        else reject(new Error("Không thể nén ảnh sản phẩm."));
+      }, "image/png");
+    };
+    img.onerror = () => reject(new Error("Không tải được ảnh sản phẩm để nén."));
+    img.src = imageDataUrl;
+  });
+}
+
+function buildTextModelInput(box, lines){
+  const chosenMaterials = selectedBuilderMaterials();
+  const card = state.admin.cards?.find(c => c.id === state.builder.card);
+  const ribbon = state.admin.ribbons?.find(r => r.id === state.builder.ribbon);
+  return {
+    box: {
+      id: box.id,
+      name: box.name,
+      innerLengthMm: Number(box.innerLength || 330),
+      innerWidthMm: Number(box.innerWidth || 230),
+      innerHeightMm: Number(box.innerHeight || 125),
+      lidClearanceMm: Number(box.lidClearance || 7),
+      maxWeightGram: Number(box.maxWeight || 2500)
+    },
+    materials: chosenMaterials.map(m => ({
+      id: m.id,
+      name: m.name,
+      kind: m.kind,
+      thicknessMm: Number(m.thickness || 0)
+    })),
+    products: lines.map(line => {
+      const p = line.item;
+      const m = p.model3d || {};
+      return {
+        productId: p.id,
+        name: p.name,
+        quantity: Number(line.qty || 1),
+        lengthMm: Number(m.length || 100),
+        widthMm: Number(m.width || 70),
+        heightMm: Number(m.height || 45),
+        weightGram: Number(m.weight || 100),
+        paddingMm: Number(m.padding || 0),
+        fragile: Boolean(m.fragile),
+        canSupport: m.canSupport !== false,
+        primaryFace: "up"
+      };
+    }),
+    card: {
+      name: card?.name || "None",
+      message: state.builder.message || ""
+    },
+    ribbon: {
+      name: ribbon?.name || "None"
+    }
+  };
+}
+
+function validateAndConvertTextModelLayout(rawJson, box, lines){
+  let parsed;
+  try {
+    parsed = parseAiJson(rawJson);
+  } catch(e) {
+    return { valid: false, errors: ["Dữ liệu phản hồi không phải JSON hợp lệ: " + e.message] };
+  }
+  if (!parsed || typeof parsed !== "object") {
+    return { valid: false, errors: ["Dữ liệu trả về rỗng hoặc không đúng cấu trúc JSON."] };
+  }
+  if (parsed.status === "impossible") {
+    return { valid: false, impossible: true, errors: [parsed.reason || "AI đánh giá không thể xếp vừa các món vào hộp này."] };
+  }
+
+  const layout = parsed.layout || parsed;
+  const placements = Array.isArray(layout.placements) ? layout.placements : [];
+  if (!placements.length) {
+    return { valid: false, errors: ["Thiếu danh sách vị trí xếp món (placements)."] };
+  }
+
+  // Validate product IDs and quantities
+  const expectedMap = new Map();
+  lines.forEach(l => {
+    expectedMap.set(l.item.id, Number(l.qty || 0));
+  });
+
+  const placementCounts = new Map();
+  for (const pl of placements) {
+    const pid = pl.productId;
+    if (!expectedMap.has(pid)) {
+      return { valid: false, errors: [`Sản phẩm lạ trong phương án: "${pid}" không nằm trong danh sách đã chọn.`] };
+    }
+    placementCounts.set(pid, (placementCounts.get(pid) || 0) + 1);
+  }
+
+  for (const [pid, expectedQty] of expectedMap.entries()) {
+    const actualQty = placementCounts.get(pid) || 0;
+    if (actualQty !== expectedQty) {
+      const pName = lines.find(l => l.item.id === pid)?.item?.name || pid;
+      return { valid: false, errors: [`Số lượng của "${pName}" là ${actualQty}, nhưng yêu cầu phải là ${expectedQty}.`] };
+    }
+  }
+
+  // Build 3D configuration
+  const cfg = syncPackingConfiguration({ configuration: null, box, lines, materials: state.admin.materials3d, owner: owner() });
+  cfg.materials = structuredClone(state.builder.materials || {});
+  cfg.primaryFaceRule = "up";
+  const floor = aiFloorHeight();
+  const used = new Set();
+
+  for (const pl of placements) {
+    const candidates = cfg.instances.filter(x => x.productId === pl.productId);
+    const qIndex = Number(pl.quantityIndex ?? 0);
+    const instance = candidates[qIndex] || candidates.find(x => !used.has(x.instanceId));
+    if (!instance || used.has(instance.instanceId)) {
+      return { valid: false, errors: [`Không tìm thấy vật thể hợp lệ cho sản phẩm ${pl.productId} (chỉ mục ${qIndex}).`] };
+    }
+
+    const x = Number(pl.xMm ?? pl.x ?? 0);
+    const z = Number(pl.zMm ?? pl.z ?? 0);
+    const rawRot = Number(pl.rotationYDeg ?? pl.rotationY ?? 0);
+    const rotY = Math.abs(Math.round(rawRot / 90)) % 2 ? 90 : 0;
+
+    instance.x = x;
+    instance.z = z;
+    instance.rotX = 0;
+    instance.rotY = rotY;
+    instance.rotZ = 0;
+    instance.inBox = true;
+    instance.labelFacing = "up";
+    instance.profile.primaryFace = "top";
+
+    const d = aiPlacedDimensions(instance);
+    const reqY = Number(pl.yMm ?? pl.y);
+    instance.y = Number.isFinite(reqY) ? reqY : floor + d.height / 2;
+
+    used.add(instance.instanceId);
+  }
+
+  if (used.size !== cfg.instances.length) {
+    return { valid: false, errors: ["Chưa xếp đủ tất cả sản phẩm vào lòng hộp."] };
+  }
+
+  cfg.selectedId = null;
+  cfg.updatedAt = new Date().toISOString();
+
+  // Run comprehensive geometry check
+  const report = validatePackingConfiguration(cfg, box, lines);
+  if (!report.valid) {
+    return { valid: false, errors: report.messages, cfg, report, parsedLayout: layout };
+  }
+
+  const styleId = layout.strategy || "balanced";
+  const style = AI_LAYOUT_STYLES.find(x => x.id === styleId) || AI_LAYOUT_STYLES[0];
+  const validatedLayout = {
+    id: `api-${style.id}-${Date.now()}`,
+    strategy: style.id,
+    name: style.name,
+    description: style.description,
+    badge: style.badge,
+    faceRule: "Mặt chính luôn hướng lên",
+    source: "text-model-api",
+    configuration: cfg,
+    report,
+    generatedAt: new Date().toISOString()
+  };
+
+  return { valid: true, layout: validatedLayout, cfg, report };
+}
+
+function getProductFormFactor(p) {
+  const m = p?.model3d || {};
+  const cat = String(p?.category || "").toLowerCase();
+  const name = String(p?.name || "").toLowerCase();
+  const shape = String(m.shape || "box").toLowerCase();
+  const length = Number(m.length || 100);
+  const width = Number(m.width || 70);
+  const height = Number(m.height || 45);
+
+  if (cat.includes("socola") || name.includes("socola") || name.includes("chocolate")) {
+    return "SEALED RETAIL BOX OF CHOCOLATE (packaged inside its printed brand retail box/wrapper, lying flat facing up; strictly a thin flat rectangular paper carton, NOT bare unpackaged chocolate cubes, NOT a jar, NOT a bottle)";
+  }
+  if (cat.includes("nến") || name.includes("nến") || name.includes("candle") || shape === "cylinder") {
+    return "CYLINDRICAL GLASS JAR CANDLE with round screw lid";
+  }
+  if (cat.includes("trà") || name.includes("trà") || name.includes("tea")) {
+    return "SEALED STAND-UP TEA POUCH OR RECTANGULAR TEA BOX";
+  }
+  if (shape === "cylinder") {
+    return "CYLINDRICAL JAR / ROUND CONTAINER";
+  }
+  if (height < Math.min(length, width) * 0.4) {
+    return "SEALED FLAT RECTANGULAR RETAIL BOX (thin and flat paperboard packaging, NOT a jar, NOT a bottle)";
+  }
+  return "SEALED RECTANGULAR BOX PACKAGING";
+}
+
+function getSpatialZone(x, z, boxLength, boxWidth) {
+  const halfL = (boxLength || 220) / 2;
+  const halfW = (boxWidth || 160) / 2;
+  
+  let hPos = "center";
+  if (x < -halfL * 0.2) hPos = "left";
+  else if (x > halfL * 0.2) hPos = "right";
+
+  let vPos = "middle";
+  if (z < -halfW * 0.2) vPos = "back";
+  else if (z > halfW * 0.2) vPos = "front";
+
+  if (hPos === "left" && vPos === "back") return "the back-left corner INSIDE the open box";
+  if (hPos === "left" && vPos === "front") return "the front-left corner INSIDE the open box";
+  if (hPos === "right" && vPos === "back") return "the back-right corner INSIDE the open box";
+  if (hPos === "right" && vPos === "front") return "the front-right corner INSIDE the open box";
+  if (hPos === "left") return "the left half INSIDE the open box";
+  if (hPos === "right") return "the right half INSIDE the open box";
+  if (vPos === "back") return "the back-center area INSIDE the open box";
+  if (vPos === "front") return "the front-center area INSIDE the open box";
+  return "the center INSIDE the open box";
+}
+
+function buildFluxImagePrompt(validatedLayout, builderData, activeRefs) {
+  const { box, lines, card, ribbon } = builderData;
+  const materials = selectedBuilderMaterials();
+  
+  const refMap = activeRefs.map((line, idx) => {
+    const form = getProductFormFactor(line.item);
+    return `- Input image ${idx} represents productId=${line.item.id}, product name=${line.item.name}. Packaging form: ${form}. Model MUST preserve this exact packaged appearance and shape from the reference image.`;
+  }).join("\n");
+  
+  const productList = lines.map(line => {
+    const p = line.item;
+    const m = p.model3d || {};
+    const form = getProductFormFactor(p);
+    return `- ${p.name} (productId=${p.id}): Quantity ${line.qty}, Packaging form: [${form}], dimensions ${Math.round(m.length || 100)} × ${Math.round(m.width || 70)} × ${Math.round(m.height || 45)} mm, weight ${Math.round(m.weight || 100)}g.`;
+  }).join("\n");
+  
+  const placementList = validatedLayout.configuration.instances.map((inst, idx) => {
+    const rot = Number(inst.rotY || 0);
+    const rotDeg = Math.abs(rot) > 45 ? 90 : 0;
+    const p = lines.find(l => l.item.id === inst.productId)?.item;
+    const form = p ? getProductFormFactor(p) : "packaging box";
+    const zone = getSpatialZone(inst.x, inst.z, box.innerLength, box.innerWidth);
+    return `- Item ${idx + 1} (${inst.name}, productId=${inst.productId}): Placed in the [${zone}] (approx coordinates X=${Math.round(inst.x)}mm, Z=${Math.round(inst.z)}mm), orientation ${rotDeg} degrees, main front label facing UP towards camera. Packaging type: [${form}].`;
+  }).join("\n");
+  
+  const materialsDesc = materials.length ? materials.map(m => `${m.name} (${m.kind}, ${m.thickness}mm)`).join(", ") : "Kraft shredded paper filler";
+  const cardDesc = card?.name ? `${card.name}${state.builder.message ? ` with printed note: "${state.builder.message}"` : ""}` : "No card";
+  const ribbonDesc = ribbon?.name ? `${ribbon.name} tied neatly as an accent` : "No ribbon";
+  const basePrompt = state.admin.ai?.imagePrompt || DEFAULT_AI_IMAGE_PROMPT;
+
+  return `Create exactly one photorealistic premium e-commerce product photograph. Show an elegant open gift box viewed from a slightly elevated top-down angle. ALL ${lines.length} products must be arranged INSIDE the box on the filler material. NO product may be placed outside, beside, or around the box.
+
+${basePrompt}
+
+REFERENCE IMAGE MAPPING:
+${refMap}
+
+Each reference image is the mandatory visual identity of that product. Preserve its exact retail packaging carton/pouch, color palette, front label and recognizable appearance.
+
+VALIDATED BOX:
+- Box name: ${box.name}
+- Inner dimensions: ${box.innerLength} × ${box.innerWidth} × ${box.innerHeight} millimeters.
+- Box color and finish: ${box.color || "Natural kraft"}, ${box.finish || "Matte cardboard"}
+- Lid: open and visible beside or behind the box.
+
+VALIDATED PRODUCTS (EXACTLY ${lines.length} PRODUCTS ONLY):
+${productList}
+
+MANDATORY SPATIAL PLACEMENT (ALL items INSIDE the open box):
+${placementList}
+
+PACKAGING:
+- Fillers: ${materialsDesc}
+- Card: ${cardDesc}
+- Ribbon: ${ribbonDesc}
+
+CRITICAL RULES:
+1. ALL ITEMS INSIDE THE BOX: Every single product MUST be placed INSIDE the open gift box, nestled among the filler material. ABSOLUTELY NO product may appear outside the box, beside the box, or on the table surface. The box interior is the ONLY valid location for all products!
+2. STRICT PRODUCT COUNT & IDENTITY: Render ONLY the ${lines.length} items listed above. DO NOT hallucinate, invent, or add extra bottles, canisters, cylinders, or gift items!
+3. RETAIL PACKAGING INTEGRITY: All products must appear inside their official SEALED retail packaging boxes or pouches as shown in the reference images. DO NOT render bare unpackaged food, raw chocolate squares, or open contents!
+4. PRESERVE PACKAGING SHAPES: Flat chocolate boxes must appear as flat rectangular boxes. Cylindrical jars (candle) must appear as jars. Tea pouches must appear as sealed stand-up pouches. Do not convert one shape into another!
+5. SPATIAL ARRANGEMENT INSIDE THE BOX: Place items in their designated zones within the box interior. All items share the same box interior space with the filler material between them.
+6. All front labels must face upwards towards the camera. Clean luxury e-commerce studio lighting, top-down perspective, no watermarks, no diagrams.`;
+}
+
 function packingImagePrompt(layout,t){
   const products=t.lines.map(line=>({productId:line.item.id,name:line.item.name,quantity:line.qty,dimensionsMm:{length:line.item.model3d?.length,width:line.item.model3d?.width,height:line.item.model3d?.height},mainFace:"front/up"}));
   const placements=layout.configuration.instances.map((instance,index)=>({order:index+1,productId:instance.productId,name:instance.name,xMm:Math.round(instance.x),zMm:Math.round(instance.z),rotationOnFloorDeg:Number(instance.rotY||0),mainFace:"up"}));
   const specification={box:{name:t.pack.name,color:t.pack.color,finish:t.pack.finish,innerDimensionsMm:[t.pack.innerLength,t.pack.innerWidth,t.pack.innerHeight],lid:"open and visible beside or behind the box"},fillers:selectedBuilderMaterials().map(x=>({name:x.name,kind:x.kind,color:x.color,thicknessMm:x.thickness})),card:{name:t.card?.name||"Không chọn",message:state.builder.message||""},ribbon:{name:t.ribbon?.name||"Không chọn"},products,validatedPlacement:placements,lidClearanceMm:Math.round(layout.report.lidClearanceMm)};
   return `${state.admin.ai?.imagePrompt||DEFAULT_AI_IMAGE_PROMPT}\n\nTHÔNG SỐ THÀNH PHẨM ĐÃ CHỌN:\n${JSON.stringify(specification)}\n\nCác ảnh sản phẩm sẽ được đính kèm ngay sau lời nhắc này. Hãy coi từng ảnh là nguồn nhận diện bắt buộc, còn kiểu hộp và phụ kiện phải lấy đúng từ thông số trên. Không biến các món bên trong thành những gói quà bọc giấy giống nhau.`;
 }
+
 function generatedImageSource(payload){
   const parts=payload?.candidates?.[0]?.content?.parts||[],part=parts.find(x=>x?.inlineData?.data||x?.inline_data?.data),inline=part?.inlineData||part?.inline_data;
   if(inline?.data)return `data:${inline.mimeType||inline.mime_type||"image/png"};base64,${inline.data}`;
   const openAi=payload?.data?.[0];if(openAi?.b64_json)return `data:image/png;base64,${openAi.b64_json}`;return openAi?.url||"";
 }
-async function requestAiPackingFinalImage(){
-  const ai=state.admin.ai||{},t=builderTotals(),layout=(state.builder.aiLayouts||[]).find(x=>x.id===state.builder.aiLayoutId);if(aiPackingImageBusy)return;
-  if(!ai.enabled||!ai.imageEndpoint||!ai.imageModel||!aiSessionKey)return toast("Hãy nhập API tạo ảnh Gemini, model ảnh và API key tại Quản trị → Cài đặt.");
-  if(!layout||!t.pack||!t.lines.length)return toast("Chưa có bố cục hợp lệ để tạo ảnh thành phẩm.");
-  aiPackingImageBusy=true;state.builder.aiError="";render();
-  try{
-    const prompt=packingImagePrompt(layout,t),endpoint=String(ai.imageEndpoint||"");let response;
-    if(isGeminiImageEndpoint(endpoint)){
-      const parts=[{text:prompt}],referenceLines=t.lines.filter(line=>mainProductImage(line.item)).slice(0,10);
-      for(const line of referenceLines){
-        const image=await referenceImageData(mainProductImage(line.item));
-        parts.push({text:`Ảnh nhận diện bắt buộc cho productId=${line.item.id}, tên “${line.item.name}”, số lượng ${line.qty}. Giữ đúng bao bì và để mặt chính này hướng lên.`},{inline_data:{mime_type:image.mimeType,data:image.data}});
+
+async function runGiftBoxAiPipeline(){
+  const t = builderTotals();
+  if (aiRequestBusy || aiPackingImageBusy) return;
+  if (!t.lines.length || !t.pack) return toast("Chưa có đủ món và hộp để thực hiện.");
+  
+  const ai = state.admin.ai || {};
+  const currentTextKey = aiSessionKey;
+  const currentImageKey = aiImageSessionKey || aiSessionKey;
+  const hasTextModelConfig = Boolean(ai.enabled && ai.endpoint && ai.model && currentTextKey);
+  const isCloudflare = ai.imageProvider === "cloudflare" || isCloudflareWorkerEndpoint(ai.imageEndpoint);
+  const hasImageModelConfig = Boolean(ai.enabled && ai.imageEndpoint && ai.imageModel && currentImageKey);
+
+  aiRequestBusy = true;
+  state.builder.aiError = "";
+  aiPipelineProgress = {
+    active: true,
+    step: "text_planning",
+    stepNumber: 1,
+    message: hasTextModelConfig
+      ? "Bước 1/4: Đang gửi dữ liệu kích thước thực tế sang Text Model để lập phương án xếp..."
+      : "Bước 1/4: Sử dụng thuật toán hình học tính toán phương án xếp theo kích thước thật...",
+    repairAttempt: 0,
+    maxRepairs: 2,
+    errors: [],
+    source: hasTextModelConfig ? `Text Model (${ai.model})` : "Thuật toán hình học cục bộ"
+  };
+  render();
+
+  try {
+    let validatedLayout = null;
+    const inputData = buildTextModelInput(t.pack, t.lines);
+
+    if (hasTextModelConfig) {
+      // Stage 1: Send to Text Model
+      const requestBody = {
+        model: ai.model,
+        temperature: Number(ai.temperature || 0.15),
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: ai.textModelPrompt || ai.packingPrompt || TEXT_MODEL_PACKING_PROMPT },
+          { role: "user", content: `DỮ LIỆU ĐẦU VÀO:\n${JSON.stringify(inputData, null, 2)}` }
+        ]
+      };
+
+      const response = await fetch(ai.endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${currentTextKey}`
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload?.error?.message || `Text Model API trả mã lỗi ${response.status}`);
+      
+      let rawJson = apiContent(payload);
+      aiPipelineProgress.step = "validating";
+      aiPipelineProgress.stepNumber = 2;
+      aiPipelineProgress.message = "Bước 2/4: Đang kiểm tra hình học (lòng hộp, không va chạm, khoảng đóng nắp, mặt hướng lên)...";
+      render();
+
+      let validationResult = validateAndConvertTextModelLayout(rawJson, t.pack, t.lines);
+      let repairAttempt = 0;
+      const MAX_REPAIRS = 2;
+
+      while (!validationResult.valid && repairAttempt < MAX_REPAIRS && !validationResult.impossible) {
+        repairAttempt++;
+        aiPipelineProgress.step = "repairing";
+        aiPipelineProgress.repairAttempt = repairAttempt;
+        aiPipelineProgress.errors = validationResult.errors || [];
+        aiPipelineProgress.message = `Bước 2/4: Phát hiện ${validationResult.errors.length} lỗi hình học. Đang yêu cầu Text Model sửa (lần ${repairAttempt}/${MAX_REPAIRS})...`;
+        render();
+
+        const repairPromptText = (ai.repairPrompt || TEXT_MODEL_REPAIR_PROMPT)
+          .replace("{{VALIDATION_ERRORS}}", (validationResult.errors || []).map(e => `- ${e}`).join("\n"))
+          .replace("{{INPUT_DATA}}", JSON.stringify(inputData, null, 2))
+          .replace("{{INVALID_LAYOUT}}", typeof rawJson === "string" ? rawJson : JSON.stringify(rawJson, null, 2));
+
+        const repairResponse = await fetch(ai.endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${currentTextKey}`
+          },
+          body: JSON.stringify({
+            model: ai.model,
+            temperature: Number(ai.temperature || 0.15),
+            response_format: { type: "json_object" },
+            messages: [
+              { role: "system", content: ai.textModelPrompt || ai.packingPrompt || TEXT_MODEL_PACKING_PROMPT },
+              { role: "user", content: repairPromptText }
+            ]
+          })
+        });
+
+        const repairPayload = await repairResponse.json().catch(() => ({}));
+        if (!repairResponse.ok) throw new Error(repairPayload?.error?.message || `Text Model sửa lỗi trả mã ${repairResponse.status}`);
+        rawJson = apiContent(repairPayload);
+        validationResult = validateAndConvertTextModelLayout(rawJson, t.pack, t.lines);
       }
-      if(!referenceLines.length)throw new Error("Các món đã chọn chưa có ảnh chính để gửi cho Gemini.");
-      response=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":aiSessionKey},body:JSON.stringify({contents:[{role:"user",parts}],generationConfig:{responseModalities:["IMAGE"],imageConfig:{aspectRatio:"4:3",imageSize:"1K"}}})});
-    }else{
-      response=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${aiSessionKey}`},body:JSON.stringify({model:ai.imageModel,prompt,n:1,size:ai.imageSize||"1536x1024",response_format:"b64_json"})});
+
+      if (validationResult.valid) {
+        validatedLayout = validationResult.layout;
+      } else {
+        if (validationResult.impossible) {
+          throw new Error(validationResult.errors[0] || "AI xác nhận các món này không thể xếp vừa hộp đã chọn.");
+        }
+        console.warn("Text Model could not produce valid geometry after 2 repairs. Falling back to local procedural packing.");
+        aiPipelineProgress.message = "Bố cục Text Model chưa đạt sau 2 lần sửa; hệ thống tự động xếp an toàn theo thuật toán chuẩn...";
+        render();
+        const fallback = buildAiLayout("balanced", 0, t.pack, t.lines) || buildAiLayout("safe", 1, t.pack, t.lines);
+        if (!fallback) throw new Error("Các món đã chọn vượt quá không gian hộp. Vui lòng chọn hộp lớn hơn.");
+        validatedLayout = fallback;
+      }
+    } else {
+      // Local procedural packing
+      const fallback = buildAiLayout("balanced", 0, t.pack, t.lines) || buildAiLayout("safe", 1, t.pack, t.lines);
+      if (!fallback) throw new Error("Các món đã chọn vượt quá không gian hộp. Vui lòng chọn hộp lớn hơn.");
+      validatedLayout = fallback;
     }
-    const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload?.error?.message||`API tạo ảnh trả mã ${response.status}`);
-    const source=generatedImageSource(payload);if(!source)throw new Error("API chưa trả về dữ liệu ảnh. Với Gemini, hãy dùng endpoint kết thúc bằng :generateContent và model tạo ảnh.");
-    aiPackingImage=source;aiPackingImageMeta={model:ai.imageModel,createdAt:new Date().toISOString(),referenceCount:t.lines.filter(line=>mainProductImage(line.item)).slice(0,10).length};toast("Đã tạo ảnh xem trước thành phẩm từ ảnh chính của các món.");
-  }catch(error){state.builder.aiError=String(error?.message||"Không tạo được ảnh thành phẩm.");save();toast(state.builder.aiError);}
-  finally{aiPackingImageBusy=false;render();}
+
+    // Save verified layout
+    state.builder.aiLayouts = [validatedLayout];
+    state.builder.aiLayoutId = validatedLayout.id;
+    state.builder.aiLayoutSignature = JSON.stringify({
+      version: "pipeline-v1",
+      box: t.pack.id,
+      items: t.lines.map(x => [x.item.id, x.qty]),
+      materials: state.builder.materials,
+      seed: state.builder.aiSeed || 1
+    });
+    state.builder.aiSource = {
+      type: hasTextModelConfig ? "api" : "procedural",
+      model: hasTextModelConfig ? ai.model : "procedural-engine",
+      validFromApi: 1,
+      generatedAt: new Date().toISOString()
+    };
+    save();
+
+    // Stage 3: Generate photo with Cloudflare FLUX (or Gemini / OpenAI)
+    if (hasImageModelConfig) {
+      aiPackingImageBusy = true;
+      aiPipelineProgress.step = "generating_image";
+      aiPipelineProgress.stepNumber = 3;
+      aiPipelineProgress.message = `Bước 3/4: Đang gửi bố cục đã kiểm tra và ảnh sản phẩm sang ${isCloudflare ? "Cloudflare FLUX.2 Klein 4B" : ai.imageModel}...`;
+      render();
+
+      const referenceLines = t.lines.filter(line => mainProductImage(line.item));
+      if (!referenceLines.length) throw new Error("Các món đã chọn chưa có ảnh chính để gửi cho AI tạo ảnh.");
+
+      if (isCloudflare) {
+        if (referenceLines.length > 4) {
+          const proceed = confirm(`CẢNH BÁO GIỚI HẠN CLOUDFLARE WORKERS AI:\n\nModel FLUX.2 Klein 4B trên Cloudflare nhận tối đa 4 ảnh tham chiếu. Bạn đang có ${referenceLines.length} loại sản phẩm.\n\nNhấn 'OK' để tiếp tục gửi 4 sản phẩm đầu tiên (sản phẩm còn lại nhận diện qua mô tả text chi tiết).\nNhấn 'Cancel' nếu bạn muốn quay lại giảm số loại sản phẩm.`);
+          if (!proceed) {
+            aiPipelineProgress.active = false;
+            aiPipelineProgress.step = "idle";
+            aiPackingImageBusy = false;
+            aiRequestBusy = false;
+            render();
+            toast("Đã giữ bố cục kỹ thuật. Bạn có thể chọn tối đa 4 loại món để gửi đủ ảnh tham chiếu.");
+            return;
+          }
+        }
+        const activeRefs = referenceLines.slice(0, 4);
+        const fluxPrompt = buildFluxImagePrompt(validatedLayout, { box: t.pack, lines: t.lines, card: t.card, ribbon: t.ribbon }, activeRefs);
+
+        const formData = new FormData();
+        formData.append("prompt", fluxPrompt);
+        formData.append("width", "1024");
+        formData.append("height", "768");
+
+        for (let i = 0; i < activeRefs.length; i++) {
+          const line = activeRefs[i];
+          const dataUrl = mainProductImage(line.item);
+          const blob = await resizeImageToBlob(dataUrl, 512);
+          formData.append(`input_image_${i}`, blob, `product_${i}.png`);
+        }
+
+        const imageResponse = await fetch(ai.imageEndpoint, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${currentImageKey}`
+          },
+          body: formData
+        });
+
+        const imagePayload = await imageResponse.json().catch(() => ({}));
+        if (!imageResponse.ok) throw new Error(imagePayload?.error?.message || `Cloudflare Worker trả mã lỗi ${imageResponse.status}`);
+        
+        const b64 = imagePayload?.data?.[0]?.b64_json;
+        if (!b64) throw new Error("Cloudflare Worker không trả về chuỗi ảnh data[0].b64_json.");
+        
+        aiPackingImage = `data:image/png;base64,${b64}`;
+        aiPackingImageMeta = {
+          model: ai.imageModel || "@cf/black-forest-labs/flux-2-klein-4b",
+          provider: "Cloudflare Workers AI",
+          createdAt: new Date().toISOString(),
+          referenceCount: activeRefs.length
+        };
+      } else if (isGeminiImageEndpoint(ai.imageEndpoint)) {
+        // Gemini fallback
+        const prompt = packingImagePrompt(validatedLayout, t);
+        const parts = [{ text: prompt }], activeRefs = referenceLines.slice(0, 10);
+        for (const line of activeRefs) {
+          const image = await referenceImageData(mainProductImage(line.item));
+          parts.push(
+            { text: `Ảnh nhận diện bắt buộc cho productId=${line.item.id}, tên “${line.item.name}”, số lượng ${line.qty}. Mặt chính này hướng lên.` },
+            { inline_data: { mime_type: image.mimeType, data: image.data } }
+          );
+        }
+        const imageResponse = await fetch(ai.imageEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": currentImageKey },
+          body: JSON.stringify({ contents: [{ role: "user", parts }], generationConfig: { responseModalities: ["IMAGE"], imageConfig: { aspectRatio: "4:3", imageSize: "1K" } } })
+        });
+        const imagePayload = await imageResponse.json().catch(() => ({}));
+        if (!imageResponse.ok) throw new Error(imagePayload?.error?.message || `Gemini API trả mã ${imageResponse.status}`);
+        const source = generatedImageSource(imagePayload);
+        if (!source) throw new Error("Gemini chưa trả về dữ liệu ảnh.");
+        aiPackingImage = source;
+        aiPackingImageMeta = { model: ai.imageModel, provider: "Gemini", createdAt: new Date().toISOString(), referenceCount: activeRefs.length };
+      } else {
+        // OpenAI format
+        const prompt = packingImagePrompt(validatedLayout, t);
+        const imageResponse = await fetch(ai.imageEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${currentImageKey}` },
+          body: JSON.stringify({ model: ai.imageModel, prompt, n: 1, size: ai.imageSize || "1024x768", response_format: "b64_json" })
+        });
+        const imagePayload = await imageResponse.json().catch(() => ({}));
+        if (!imageResponse.ok) throw new Error(imagePayload?.error?.message || `API ảnh trả mã ${imageResponse.status}`);
+        const source = generatedImageSource(imagePayload);
+        if (!source) throw new Error("API chưa trả về dữ liệu ảnh.");
+        aiPackingImage = source;
+        aiPackingImageMeta = { model: ai.imageModel, provider: "OpenAI", createdAt: new Date().toISOString(), referenceCount: referenceLines.length };
+      }
+    }
+
+    aiPipelineProgress.step = "completed";
+    aiPipelineProgress.stepNumber = 4;
+    aiPipelineProgress.message = aiPackingImage
+      ? "Bước 4/4: Hoàn thành! Đã tạo ảnh thành phẩm chân thực từ phương án xếp chuẩn xác."
+      : "Bước 4/4: Hoàn thành! Đã kiểm tra bố cục kỹ thuật thành công (chưa tạo ảnh vì chưa có khóa Worker).";
+    save();
+    render();
+    toast(aiPackingImage ? "Đã tạo thành công ảnh thành phẩm chân thực!" : "Đã hoàn thành kiểm tra bố cục kỹ thuật!");
+  } catch (error) {
+    console.error("AI Pipeline error:", error);
+    state.builder.aiError = String(error?.message || "Không thể thực hiện quy trình AI.");
+    aiPipelineProgress.step = "error";
+    aiPipelineProgress.message = "Lỗi quy trình: " + state.builder.aiError;
+    save();
+    render();
+    toast(state.builder.aiError);
+  } finally {
+    aiRequestBusy = false;
+    aiPackingImageBusy = false;
+    render();
+  }
 }
+
+async function requestAiPackingLayouts(){ return runGiftBoxAiPipeline(); }
+async function requestAiPackingFinalImage(){ return runGiftBoxAiPipeline(); }
 function aiLayoutPreview(layout,box){
   const length=Number(box.innerLength),width=Number(box.innerWidth),materials=selectedBuilderMaterials().map(x=>x.name).slice(0,2).join(" · ");
   const items=layout.configuration.instances.map((instance,index)=>{
@@ -689,10 +1270,110 @@ function aiPackingPage(){
   const t=builderTotals();if(!t.lines.length||!t.pack)return `<section class="section"><div class="narrow center"><span class="eyebrow">Bước cuối</span><h1>Chưa có đủ món và hộp.</h1><p class="muted">Hãy hoàn tất các bước chọn món và chọn hộp trước.</p><a class="button" href="/tu-tao-hop" data-route>Quay lại Tự tạo hộp</a></div></section>`;
   const layouts=prepareAiLayouts(t.pack,t.lines),selected=layouts.find(x=>x.id===state.builder.aiLayoutId);
   if(!layouts.length)return `<section class="section"><div class="narrow center"><span class="eyebrow">Chưa tìm được cách xếp hợp lệ</span><h1>Những món này chưa vừa hộp đã chọn.</h1><p class="muted">Hãy đổi sang hộp lớn hơn, giảm vật liệu lót hoặc bỏ bớt một món. Hệ thống không thu nhỏ sản phẩm để tạo ảnh đẹp giả.</p><button class="button" data-action="return-builder-step" data-step="2">Đổi hộp và chèn lót</button></div></section>`;
-  const api=state.admin.ai||{},layoutApiReady=!!(api.enabled&&api.endpoint&&api.model&&aiSessionKey),imageApiReady=!!(api.enabled&&api.imageEndpoint&&api.imageModel&&aiSessionKey),apiUsed=state.builder.aiSource?.type==="api",busy=aiRequestBusy||aiPackingImageBusy;
+  const api=state.admin.ai||{},layoutApiReady=!!(api.enabled&&api.endpoint&&api.model&&aiSessionKey),imageApiReady=!!(api.enabled&&api.imageEndpoint&&api.imageModel&&(aiImageSessionKey||aiSessionKey)),apiUsed=state.builder.aiSource?.type==="api",busy=aiRequestBusy||aiPackingImageBusy;
   const references=t.lines.map(line=>{const image=mainProductImage(line.item);return `<div class="packing-reference-item">${image?`<img src="${esc(image)}" alt="Ảnh chính ${esc(line.item.name)}">`:`<span>${esc(line.item.name.slice(0,1))}</span>`}<div><strong>${line.qty} × ${esc(line.item.name)}</strong><small>${line.item.model3d.length} × ${line.item.model3d.width} × ${line.item.model3d.height} mm</small></div></div>`;}).join("");
-  const finalVisual=aiPackingImage?`<figure class="ai-final-photo"><img src="${aiPackingImage}" alt="Ảnh AI xem trước hộp quà thành phẩm"><figcaption><span>Ảnh xem trước do ${esc(aiPackingImageMeta?.model||api.imageModel)} tạo từ ${aiPackingImageMeta?.referenceCount||t.lines.length} ảnh sản phẩm</span><em>Thông số đóng gói vẫn lấy từ bố cục kích thước thật bên dưới.</em></figcaption></figure>`:`<div class="ai-final-placeholder"><div class="ai-final-placeholder-art"><span>Ảnh hộp quà thành phẩm</span><i></i><i></i><i></i></div><h2>${aiPackingImageBusy?"AI đang tạo ảnh chân thật…":"Tạo ảnh giống một hộp quà đã được chụp thật"}</h2><p>AI dùng ảnh chính diện từng món làm nhận diện, rồi đặt chúng vào đúng hộp, chèn lót, thiệp và ruy băng bạn đã chọn.</p></div>`;
-  return `<section class="ai-packing-page"><div class="container"><div class="steps builder-five-steps packing-progress">${["Chọn món","Hộp & chèn lót","Thiệp & trang trí","Xem lại","Ảnh thành phẩm AI"].map((n,i)=>`<button class="step ${i===4?"active":""}" ${i===4?'disabled':`data-action="return-builder-step" data-step="${i+1}"`}>${i+1} · ${n}</button>`).join("")}</div><div class="ai-layout-hero"><div><span class="eyebrow">Bước cuối · ảnh xem trước thành phẩm</span><h1>Nhìn thấy hộp quà trước khi đặt.</h1><p>Kích thước thật được kiểm tra trước; Gemini chỉ tạo ảnh sau khi các món đã nằm gọn, không chồng lấn và còn đóng được nắp.</p></div><div class="ai-rule-card"><strong>Quy tắc cố định</strong><span>✓ Đúng tỉ lệ kích thước</span><span>✓ Đúng ảnh chính từng món</span><span>✓ Đúng hộp & chèn lót</span><span>✓ Mặt chính hướng lên</span></div></div><div class="ai-api-note ${imageApiReady?"connected":""}"><span>AI</span><div><strong>${imageApiReady?(aiPackingImage?`Đã tạo bằng ${esc(aiPackingImageMeta?.model||api.imageModel)}`:`Gemini tạo ảnh đã sẵn sàng · ${esc(api.imageModel)}`):"Chưa kết nối API tạo ảnh Gemini"}</strong><p>${imageApiReady?"Ảnh chính từng sản phẩm và kích thước millimet sẽ được gửi cùng cấu hình hộp, giấy lót, chèn lót, thiệp và ruy băng.":"Chủ cửa hàng nhập endpoint Gemini tạo ảnh, model và API key tại Quản trị → Cài đặt."}${state.builder.aiError?`<br><b class="danger-text">${esc(state.builder.aiError)}</b>`:""}</p></div><div class="row wrap">${layoutApiReady?`<button class="button small-btn" data-action="generate-ai-api" ${busy?"disabled":""}>${busy?"AI đang xử lý…":"Xếp kích thước & tạo ảnh"}</button>`:`<button class="button small-btn" data-action="generate-ai-final-image" ${imageApiReady&&!busy?"":"disabled"}>${aiPackingImageBusy?"Đang tạo ảnh…":aiPackingImage?"Tạo lại ảnh":"Tạo ảnh thành phẩm"}</button>`}<button class="button secondary small-btn" data-action="regenerate-ai-layouts" ${busy?"disabled":""}>Đổi cách xếp</button></div></div><div class="ai-final-stage">${finalVisual}<div class="packing-reference-panel"><div class="row spaced wrap"><div><span class="eyebrow">Ảnh AI phải giữ đúng</span><h2>Ảnh chính & kích thước từng món</h2></div><span>${t.lines.reduce((sum,line)=>sum+line.qty,0)} món · ${t.lines.length} loại</span></div><div class="packing-reference-strip">${references}</div><div class="packing-choice-summary"><span><b>Hộp</b>${esc(t.pack.name)} · ${t.pack.innerLength} × ${t.pack.innerWidth} × ${t.pack.innerHeight} mm</span><span><b>Chèn lót</b>${esc(selectedBuilderMaterials().map(x=>x.name).join(" · ")||"Không chọn")}</span><span><b>Hoàn thiện</b>${esc(t.card?.name||"Không thiệp")} · ${esc(t.ribbon?.name||"Không ruy băng")}</span></div></div></div><details class="packing-technical"><summary><span>Kiểm tra bố cục kỹ thuật theo kích thước thật</span><em>Đã hợp lệ · còn nắp ${Math.round(selected.report.lidClearanceMm)} mm</em></summary><div class="packing-technical-body"><div>${aiLayoutPreview(selected,t.pack)}</div><div><span class="eyebrow">Bố cục để nhân viên đóng gói</span><h2>${esc(selected.name)}</h2><p>${esc(selected.description)}</p><p class="pack-valid">✓ ${selected.configuration.instances.length} món đã vượt kiểm tra lòng hộp, va chạm và chiều cao nắp.</p><p class="fine-print">Ảnh AI giúp hình dung thành phẩm nhưng không thay thế số đo. Khi đóng hàng, shop dùng tọa độ và kích thước trong bản kỹ thuật này.</p></div></div></details><div class="ai-layout-footer"><div><span class="small">Thành phẩm đã chọn</span><strong>${aiPackingImage?"Ảnh AI + bố cục kích thước thật":`${esc(selected?.name||"Chưa có")} · chưa tạo ảnh AI`}</strong></div><div class="row wrap"><button class="button ghost" data-action="return-builder-step" data-step="4">Quay lại lựa chọn</button><button class="button" data-action="add-ai-builder-cart" ${selected?"":"disabled"}>${aiPackingImage?"Dùng ảnh này & thêm giỏ":"Dùng bố cục & thêm giỏ"}</button></div></div></div></section>`;
+  const finalVisual=aiPackingImage?`<figure class="ai-final-photo"><img src="${aiPackingImage}" alt="Ảnh AI xem trước hộp quà thành phẩm"><figcaption><span>Ảnh thành phẩm do ${esc(aiPackingImageMeta?.model||api.imageModel)} tạo từ ${aiPackingImageMeta?.referenceCount||t.lines.length} ảnh sản phẩm</span><em>Bố cục đóng gói vật lý đã được kiểm tra hình học bên dưới.</em></figcaption></figure>`:`<div class="ai-final-placeholder"><div class="ai-final-placeholder-art"><span>Ảnh hộp quà thành phẩm</span><i></i><i></i><i></i></div><h2>${aiPackingImageBusy?"Cloudflare FLUX đang tạo ảnh thành phẩm chân thật…":"Tạo ảnh thực tế từ phương án xếp đã kiểm duyệt"}</h2><p>Website kiểm tra hình học và chống va chạm trước; sau đó Cloudflare FLUX dùng ảnh sản phẩm thật và toạ độ chính xác để dựng ảnh chụp sản phẩm.</p></div>`;
+
+  const pipelineBannerHtml = `
+  <div class="ai-pipeline-banner ${aiPipelineProgress.active || busy ? 'active' : ''} ${aiPackingImage ? 'has-image' : ''}">
+    <div class="pipeline-header">
+      <div class="pipeline-title">
+        <span class="pipeline-badge">2 AI Pipeline</span>
+        <strong>Quy trình phối hợp 2 AI độc lập: ChatGPT lập bố cục + Cloudflare FLUX tạo ảnh</strong>
+      </div>
+      <div class="pipeline-steps-indicator">
+        <span class="p-step ${aiPipelineProgress.stepNumber >= 1 ? 'done' : ''} ${aiPipelineProgress.step === 'text_planning' ? 'current' : ''}">1. ChatGPT xếp hộp</span>
+        <span class="p-arrow">→</span>
+        <span class="p-step ${aiPipelineProgress.stepNumber >= 2 ? 'done' : ''} ${['validating', 'repairing'].includes(aiPipelineProgress.step) ? 'current' : ''}">2. Kiểm tra hình học & sửa</span>
+        <span class="p-arrow">→</span>
+        <span class="p-step ${aiPipelineProgress.stepNumber >= 3 ? 'done' : ''} ${aiPipelineProgress.step === 'generating_image' ? 'current' : ''}">3. Cloudflare FLUX tạo ảnh</span>
+        <span class="p-arrow">→</span>
+        <span class="p-step ${aiPipelineProgress.step === 'completed' ? 'done' : ''}">4. Thành phẩm</span>
+      </div>
+    </div>
+    ${aiPipelineProgress.message ? `<div class="pipeline-status-text ${aiPipelineProgress.step === 'error' ? 'danger-text' : ''}">
+      ${busy ? '<span class="spinner-small"></span> ' : ''}
+      ${esc(aiPipelineProgress.message)}
+    </div>` : `<div class="pipeline-status-text">
+      <span>${layoutApiReady ? `✓ Text Model: ${esc(api.model)} (Đã có khóa)` : '○ Text Model: Chưa nhập khóa (dùng thuật toán hình học chuẩn)'}</span>
+      <span style="margin: 0 8px">·</span>
+      <span>${imageApiReady ? `✓ Cloudflare FLUX: ${esc(api.imageModel)} (Đã có Secret)` : '○ Cloudflare Worker: Chưa nhập Secret'}</span>
+    </div>`}
+  </div>`;
+
+  return `<section class="ai-packing-page"><div class="container"><div class="steps builder-five-steps packing-progress">${["Chọn món","Hộp & chèn lót","Thiệp & trang trí","Xem lại","Ảnh thành phẩm AI"].map((n,i)=>`<button class="step ${i===4?"active":""}" ${i===4?'disabled':`data-action="return-builder-step" data-step="${i+1}"`}>${i+1} · ${n}</button>`).join("")}</div>
+  <div class="ai-layout-hero">
+    <div>
+      <span class="eyebrow">Bước cuối · ảnh xem trước thành phẩm</span>
+      <h1>Nhìn thấy hộp quà thực tế trước khi đặt.</h1>
+      <p>Kích thước thật được kiểm tra chặt chẽ; AI tạo ảnh chỉ nhận toạ độ và hướng xoay đã được xác nhận lọt lòng và còn khoảng hở đóng nắp.</p>
+    </div>
+    <div class="ai-rule-card">
+      <strong>Quy tắc hình học</strong>
+      <span>✓ Đúng kích thước mm thật</span>
+      <span>✓ Ảnh chính giữ nguyên bao bì</span>
+      <span>✓ Giấy lót & khoảng đóng nắp</span>
+      <span>✓ Mặt chính hướng lên</span>
+    </div>
+  </div>
+
+  ${pipelineBannerHtml}
+
+  <div class="ai-api-note ${(layoutApiReady || imageApiReady) ? "connected" : ""}">
+    <span>AI</span>
+    <div>
+      <strong>${imageApiReady ? (aiPackingImage ? `Đã tạo ảnh thành phẩm bằng ${esc(aiPackingImageMeta?.model||api.imageModel)}` : `Cloudflare FLUX sẵn sàng · ${esc(api.imageModel)}`) : (layoutApiReady ? `Text Model sẵn sàng · ${esc(api.model)}` : "Quy trình AI độc lập")}</strong>
+      <p>${layoutApiReady ? "ChatGPT lập phương án xếp theo dữ liệu mm, hệ thống kiểm tra chống va chạm rồi gửi sang Cloudflare FLUX." : "Chưa cấu hình Text Model: Hệ thống tự động dùng thuật toán xếp an toàn cục bộ rồi gửi sang Cloudflare FLUX."}${state.builder.aiError ? `<br><b class="danger-text">${esc(state.builder.aiError)}</b>` : ""}</p>
+    </div>
+    <div class="row wrap">
+      <button class="button small-btn" data-action="generate-ai-api" ${busy ? "disabled" : ""}>
+        ${busy ? "AI đang xử lý…" : (aiPackingImage ? "Tạo lại ảnh FLUX" : "Xếp kích thước & tạo ảnh FLUX")}
+      </button>
+      <button class="button secondary small-btn" data-action="regenerate-ai-layouts" ${busy ? "disabled" : ""}>Đổi cách xếp</button>
+    </div>
+  </div>
+
+  <div class="ai-final-stage">
+    ${finalVisual}
+    <div class="packing-reference-panel">
+      <div class="row spaced wrap">
+        <div><span class="eyebrow">Ảnh AI phải giữ đúng</span><h2>Ảnh chính & kích thước từng món</h2></div>
+        <span>${t.lines.reduce((sum,line)=>sum+line.qty,0)} món · ${t.lines.length} loại</span>
+      </div>
+      <div class="packing-reference-strip">${references}</div>
+      <div class="packing-choice-summary">
+        <span><b>Hộp</b>${esc(t.pack.name)} · ${t.pack.innerLength} × ${t.pack.innerWidth} × ${t.pack.innerHeight} mm</span>
+        <span><b>Chèn lót</b>${esc(selectedBuilderMaterials().map(x=>x.name).join(" · ")||"Không chọn")}</span>
+        <span><b>Hoàn thiện</b>${esc(t.card?.name||"Không thiệp")} · ${esc(t.ribbon?.name||"Không ruy băng")}</span>
+      </div>
+    </div>
+  </div>
+
+  <details class="packing-technical" open>
+    <summary><span>Bản vẽ kỹ thuật & thông số đóng gói (Kích thước thật)</span><em>Đã hợp lệ · còn nắp ${Math.round(selected.report.lidClearanceMm)} mm</em></summary>
+    <div class="packing-technical-body">
+      <div>${aiLayoutPreview(selected,t.pack)}</div>
+      <div>
+        <span class="eyebrow">Bố cục để nhân viên đóng gói</span>
+        <h2>${esc(selected.name)}</h2>
+        <p>${esc(selected.description)}</p>
+        <p class="pack-valid">✓ ${selected.configuration.instances.length} món đã vượt kiểm tra lòng hộp, va chạm và chiều cao nắp.</p>
+        <p class="fine-print">Ảnh AI minh hoạ thành phẩm trực quan. Khi thực tế đóng gói, shop căn cứ vào toạ độ và số đo mm trong bản vẽ kỹ thuật này.</p>
+      </div>
+    </div>
+  </details>
+
+  <div class="ai-layout-footer">
+    <div>
+      <span class="small">Thành phẩm đã chọn</span>
+      <strong>${aiPackingImage ? "Ảnh AI + bố cục kích thước thật" : `${esc(selected?.name||"Chưa có")} · chưa tạo ảnh AI`}</strong>
+    </div>
+    <div class="row wrap">
+      <button class="button ghost" data-action="return-builder-step" data-step="4">Quay lại lựa chọn</button>
+      <button class="button" data-action="add-ai-builder-cart" ${selected ? "" : "disabled"}>${aiPackingImage ? "Dùng ảnh này & thêm giỏ" : "Dùng bố cục & thêm giỏ"}</button>
+    </div>
+  </div>
+</div></section>`;
 }
 
 function cartPage(){ pageTitle("Giỏ hàng"); const subtotal=cartSubtotal();
@@ -840,7 +1521,149 @@ function adminAiLibrary(){
 
 function adminSettings(){
   const ai=state.admin.ai||{};
-  const body=`<form id="settings-form" class="admin-form"><section class="admin-card"><h2>Nội dung cửa hàng</h2><div class="field"><label>Dải thông báo</label><input name="banner" value="${esc(state.admin.banner||"")}"></div><div class="form-grid"><div class="field"><label>Mã chiến dịch demo</label><input name="campaign" value="${esc(state.admin.campaign||"")}"></div><div class="field"><label>Số ngày nhắc mặc định</label><input name="reminderDays" type="number" min="1" value="${state.admin.reminderDays||7}"></div></div><button class="button">Lưu cài đặt</button></section></form><form id="ai-settings-form" class="admin-form"><section class="admin-card ai-config-card"><div class="row spaced wrap"><div><span class="eyebrow">TRUNG TÂM AI</span><h2>API, model và toàn bộ prompt</h2><p class="muted small">Xếp theo kích thước thật, sau đó tạo ảnh hộp quà thành phẩm từ ảnh chính từng món.</p></div><span class="status ${aiSessionKey?"status-published":"status-draft"}">${aiSessionKey?"Đã nhập khóa trong phiên":"Chưa có khóa"}</span></div><label class="checkline"><input name="enabled" type="checkbox" ${ai.enabled?"checked":""}> Cho phép dùng API AI trên website</label><h3 class="builder-subhead">API tư vấn và xếp hộp</h3><div class="form-grid"><div class="field"><label>Chat Completions endpoint</label><input name="endpoint" type="url" placeholder="https://.../v1/chat/completions" value="${esc(ai.endpoint||"")}"><span class="fine-print">Có thể để trống nếu chỉ dùng bộ xếp kích thước trong web và Gemini tạo ảnh.</span></div><div class="field"><label>Model đọc ảnh và trả JSON</label><input name="model" placeholder="Tên model" value="${esc(ai.model||"")}"></div></div><h3 class="builder-subhead">Gemini tạo ảnh thành phẩm từ ảnh sản phẩm</h3><div class="form-grid"><div class="field"><label>Gemini generateContent endpoint</label><input name="imageEndpoint" type="url" placeholder="https://generativelanguage.googleapis.com/v1/models/gemini-3.1-flash-image:generateContent" value="${esc(ai.imageEndpoint||"")}"><span class="fine-print">Endpoint phải kết thúc bằng <b>:generateContent</b> để gửi cùng lúc nhiều ảnh sản phẩm tham chiếu.</span></div><div class="field"><label>Model tạo ảnh</label><input name="imageModel" placeholder="gemini-3.1-flash-image" value="${esc(ai.imageModel||"")}"></div><div class="field"><label>Tỉ lệ ảnh thành phẩm</label><select name="imageSize"><option value="1536x1024" ${ai.imageSize==="1536x1024"?"selected":""}>Ngang 4:3 · Gemini 1K</option><option value="1024x1024" ${ai.imageSize==="1024x1024"?"selected":""}>Vuông · API tương thích</option><option value="1024x1536" ${ai.imageSize==="1024x1536"?"selected":""}>Dọc · API tương thích</option></select></div></div><div class="field"><label>API key dùng trong phiên hiện tại</label><input name="apiKey" type="password" autocomplete="off" placeholder="Dán khóa Gemini; khóa sẽ mất khi tải lại trang"><span class="fine-print">Khóa không được ghi vào mã nguồn, localStorage hay bản xuất bản. Bản vận hành thật nên gọi AI qua máy chủ riêng.</span></div><div class="prompt-stack"><div class="field"><label>Prompt 1 — Chọn đúng 5 hộp quà khác nhau</label><textarea name="recommendationPrompt" class="ai-prompt-field" spellcheck="false">${esc(ai.recommendationPrompt||DEFAULT_AI_RECOMMENDATION_PROMPT)}</textarea></div><div class="field"><label>Prompt 2 — Xếp đúng 1 bố cục theo kích thước</label><textarea name="packingPrompt" class="ai-prompt-field" spellcheck="false">${esc(ai.packingPrompt||AI_PACKING_SYSTEM_PROMPT)}</textarea></div><div class="field"><label>Prompt 3 — Tạo ảnh chụp hộp quà thành phẩm</label><textarea name="imagePrompt" class="ai-prompt-field" spellcheck="false">${esc(ai.imagePrompt||DEFAULT_AI_IMAGE_PROMPT)}</textarea></div></div><div class="row wrap"><button class="button">Lưu toàn bộ cấu hình AI</button><button class="button ghost" type="button" data-action="clear-ai-key" ${aiSessionKey?"":"disabled"}>Xóa API key khỏi phiên</button><a class="button secondary" href="/quan-tri/thu-vien-ai" data-route>Quản lý ảnh tham khảo</a></div></section></form><section class="admin-card"><div class="row spaced"><div><h2>Nhân sự và vai trò</h2><p class="muted small">Đăng ký công khai không thể tự nhận vai trò này.</p></div></div>${state.admin.staff.map(s=>`<div class="admin-list-row"><div><strong>${esc(s.name)}</strong><span>${esc(s.email)} · ${esc(ROLE_LABELS[s.role])}</span></div><button class="link" data-action="toggle-staff" data-email="${esc(s.email)}" ${s.role==="owner"?"disabled":""}>${s.active?"Tạm khóa":"Mở lại"}</button></div>`).join("")}<form id="staff-form" class="option-form"><input name="name" required placeholder="Tên nhân viên"><input name="email" type="email" required placeholder="email@goithuong.test"><select name="role"><option value="product">Nhân viên sản phẩm</option><option value="orders">Nhân viên đơn hàng</option></select><button class="button small-btn">Cấp quyền</button></form></section>`;
+  const body=`<form id="settings-form" class="admin-form"><section class="admin-card"><h2>Nội dung cửa hàng</h2><div class="field"><label>Dải thông báo</label><input name="banner" value="${esc(state.admin.banner||"")}"></div><div class="form-grid"><div class="field"><label>Mã chiến dịch demo</label><input name="campaign" value="${esc(state.admin.campaign||"")}"></div><div class="field"><label>Số ngày nhắc mặc định</label><input name="reminderDays" type="number" min="1" value="${state.admin.reminderDays||7}"></div></div><button class="button">Lưu cài đặt</button></section></form>
+  
+  <form id="ai-settings-form" class="admin-form">
+    <section class="admin-card ai-config-card">
+      <div class="row spaced wrap">
+        <div>
+          <span class="eyebrow">TRUNG TÂM AI</span>
+          <h2>Hai AI phối hợp độc lập</h2>
+          <p class="muted small">ChatGPT lập phương án xếp dựa trên số đo mm; sau khi kiểm tra hình học hợp lệ, Cloudflare FLUX tạo ảnh thành phẩm.</p>
+        </div>
+        <div class="row gap-small">
+          <span class="status ${aiSessionKey ? "status-published" : "status-draft"}">${aiSessionKey ? "Key Text: Có" : "Key Text: Chưa"}</span>
+          <span class="status ${aiImageSessionKey ? "status-published" : "status-draft"}">${aiImageSessionKey ? "Secret FLUX: Có" : "Secret FLUX: Chưa"}</span>
+        </div>
+      </div>
+      
+      <label class="checkline" style="margin-bottom: 20px;">
+        <input name="enabled" type="checkbox" ${ai.enabled ? "checked" : ""}> Kích hoạt trung tâm AI trên website
+      </label>
+
+      <!-- KHU VỰC A -->
+      <div style="background: #faf7f2; border: 1px solid #dcd3c8; border-radius: 8px; padding: 18px 20px; margin-bottom: 22px;">
+        <div class="row spaced wrap" style="margin-bottom: 12px;">
+          <div>
+            <h3 style="margin: 0; font-size: 1.05rem; color: #43281c;">PHẦN A — AI lập phương án xếp (ChatGPT / Text Model)</h3>
+            <p class="fine-print" style="margin-top: 2px;">Chịu trách nhiệm phân tích kích thước và lập phương án JSON, không tạo ảnh.</p>
+          </div>
+          <span class="status" style="background: #e9ecef; font-size: 0.72rem;">Bắt buộc trả JSON · response_format</span>
+        </div>
+
+        <div class="form-grid">
+          <div class="field">
+            <label>Chat Completions endpoint</label>
+            <input name="endpoint" type="url" placeholder="https://api.openai.com/v1/chat/completions" value="${esc(ai.endpoint||"")}">
+            <span class="fine-print">OpenAI hoặc endpoint tương thích Chat Completions.</span>
+          </div>
+          <div class="field">
+            <label>Text model</label>
+            <input name="model" placeholder="gpt-4o-mini hoặc gpt-4o" value="${esc(ai.model||"")}">
+            <span class="fine-print">Model tiếp nhận dữ liệu kích thước và xuất JSON vị trí.</span>
+          </div>
+          <div class="field">
+            <label>API key Text Model dùng trong phiên</label>
+            <input name="apiKey" type="password" autocomplete="off" placeholder="sk-...">
+            <span class="fine-print">${aiSessionKey ? "✓ Đang giữ khóa trong RAM phiên này" : "Khóa chỉ lưu trong biến JS của tab, mất khi tải lại trang."}</span>
+          </div>
+          <div class="field">
+            <label>Temperature (Mặc định 0.1–0.2)</label>
+            <input name="temperature" type="number" step="0.05" min="0" max="1" value="${ai.temperature !== undefined ? ai.temperature : 0.15}">
+            <span class="fine-print">Nhiệt độ thấp giúp mô hình tuân thủ quy tắc kích thước chính xác.</span>
+          </div>
+        </div>
+
+        <div class="field" style="margin-top: 12px;">
+          <label>Prompt hệ thống lập bố cục (System Prompt)</label>
+          <textarea name="textModelPrompt" class="ai-prompt-field" style="min-height: 180px;" spellcheck="false">${esc(ai.textModelPrompt || ai.packingPrompt || TEXT_MODEL_PACKING_PROMPT)}</textarea>
+          <span class="fine-print">Bao gồm 12 quy tắc bắt buộc và schema JSON trả về (status="ok" hoặc "impossible").</span>
+        </div>
+
+        <div class="field" style="margin-top: 12px;">
+          <label>Prompt sửa bố cục không hợp lệ (Repair Prompt Template)</label>
+          <textarea name="repairPrompt" class="ai-prompt-field" style="min-height: 120px;" spellcheck="false">${esc(ai.repairPrompt || TEXT_MODEL_REPAIR_PROMPT)}</textarea>
+          <span class="fine-print">Dùng khi phương án không vượt qua kiểm tra hình học. Hệ thống tự động thay thế {{VALIDATION_ERRORS}}, {{INPUT_DATA}}, {{INVALID_LAYOUT}}.</span>
+        </div>
+      </div>
+
+      <!-- KHU VỰC B -->
+      <div style="background: #fdfaf6; border: 1px solid #dcd3c8; border-radius: 8px; padding: 18px 20px; margin-bottom: 22px;">
+        <div class="row spaced wrap" style="margin-bottom: 12px;">
+          <div>
+            <h3 style="margin: 0; font-size: 1.05rem; color: #702c39;">PHẦN B — AI tạo ảnh thành phẩm (Cloudflare FLUX.2 Klein 4B)</h3>
+            <p class="fine-print" style="margin-top: 2px;">Nhận toạ độ đã kiểm tra hình học và ảnh sản phẩm để tạo ảnh thành phẩm photorealistic.</p>
+          </div>
+          <span class="status status-published" style="font-size: 0.72rem;">FLUX.2 Klein 4B · multipart/form-data</span>
+        </div>
+
+        <div class="field">
+          <label>Nhà cung cấp tạo ảnh</label>
+          <select name="imageProvider" id="ai-image-provider">
+            <option value="cloudflare" ${ai.imageProvider==="cloudflare"||!ai.imageProvider?"selected":""}>Cloudflare Workers AI (Khuyên dùng · FLUX.2 Klein 4B)</option>
+            <option value="gemini" ${ai.imageProvider==="gemini"?"selected":""}>Google Gemini API (:generateContent)</option>
+            <option value="openai" ${ai.imageProvider==="openai"?"selected":""}>API tương thích OpenAI (b64_json)</option>
+          </select>
+        </div>
+
+        <div class="form-grid">
+          <div class="field">
+            <label>Worker endpoint</label>
+            <input name="imageEndpoint" type="url" placeholder="https://goithuong-ai-image.xxx.workers.dev/" value="${esc(ai.imageEndpoint||"https://goithuong-ai-image.nguyentriquan1805.workers.dev/")}">
+            <span class="fine-print">Endpoint Cloudflare Worker nhận multipart/form-data và trả b64_json.</span>
+          </div>
+          <div class="field">
+            <label>Model tạo ảnh</label>
+            <input name="imageModel" value="${esc(ai.imageModel||"@cf/black-forest-labs/flux-2-klein-4b")}">
+            <span class="fine-print">Mặc định: @cf/black-forest-labs/flux-2-klein-4b.</span>
+          </div>
+          <div class="field">
+            <label>Worker API key / Secret dùng trong phiên</label>
+            <input name="imageApiKey" type="password" autocomplete="off" placeholder="hellodayladuan...">
+            <span class="fine-print">${aiImageSessionKey ? "✓ Đang giữ Secret Worker trong RAM phiên này" : "Khóa chỉ lưu trong biến JS của tab, mất khi tải lại trang."}</span>
+          </div>
+          <div class="field">
+            <label>Kích thước ảnh thành phẩm</label>
+            <select name="imageSize">
+              <option value="1024x768" ${ai.imageSize==="1024x768"||!ai.imageSize?"selected":""}>Ngang 4:3 (1024×768) · Chuẩn Cloudflare FLUX</option>
+              <option value="1536x1024" ${ai.imageSize==="1536x1024"?"selected":""}>Ngang 3:2 (1536×1024)</option>
+              <option value="1024x1024" ${ai.imageSize==="1024x1024"?"selected":""}>Vuông 1:1 (1024×1024)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field" style="margin-top: 12px;">
+          <label>Prompt nền tạo ảnh</label>
+          <textarea name="imagePrompt" class="ai-prompt-field" style="min-height: 110px;" spellcheck="false">${esc(ai.imagePrompt||DEFAULT_AI_IMAGE_PROMPT)}</textarea>
+          <span class="fine-print">Được kết hợp với thông số toạ độ đã kiểm tra và ánh xạ ảnh tham chiếu (input_image_0..3).</span>
+        </div>
+      </div>
+
+      <div class="field" style="margin-top: 14px;">
+        <label>Prompt gợi ý quà tặng nhanh (AI Finder)</label>
+        <textarea name="recommendationPrompt" class="ai-prompt-field" style="min-height: 80px;" spellcheck="false">${esc(ai.recommendationPrompt||DEFAULT_AI_RECOMMENDATION_PROMPT)}</textarea>
+      </div>
+
+      <div class="row wrap" style="margin-top: 18px;">
+        <button class="button">Lưu cấu hình AI</button>
+        <button class="button ghost" type="button" data-action="clear-ai-key" ${(aiSessionKey || aiImageSessionKey) ? "" : "disabled"}>Xóa toàn bộ API key khỏi phiên</button>
+        <a class="button secondary" href="/quan-tri/thu-vien-ai" data-route>Quản lý ảnh tham khảo</a>
+      </div>
+    </section>
+  </form>
+
+  <section class="admin-card">
+    <div class="row spaced">
+      <div><h2>Nhân sự và vai trò</h2><p class="muted small">Đăng ký công khai không thể tự nhận vai trò này.</p></div>
+    </div>
+    ${state.admin.staff.map(s=>`<div class="admin-list-row"><div><strong>${esc(s.name)}</strong><span>${esc(s.email)} · ${esc(ROLE_LABELS[s.role])}</span></div><button class="link" data-action="toggle-staff" data-email="${esc(s.email)}" ${s.role==="owner"?"disabled":""}>${s.active?"Tạm khóa":"Mở lại"}</button></div>`).join("")}
+    <form id="staff-form" class="option-form">
+      <input name="name" required placeholder="Tên nhân viên">
+      <input name="email" type="email" required placeholder="email@goithuong.test">
+      <select name="role"><option value="product">Nhân viên sản phẩm</option><option value="orders">Nhân viên đơn hàng</option></select>
+      <button class="button small-btn">Cấp quyền</button>
+    </form>
+  </section>`;
   return adminShell("Cài đặt","settings",body);
 }
 
@@ -952,7 +1775,7 @@ function handleAction(el){
   if(a==="generate-ai-api")return requestAiPackingLayouts();
   if(a==="generate-ai-final-image")return requestAiPackingFinalImage();
   if(a==="regenerate-ai-layouts"){state.builder.aiSeed=Number(state.builder.aiSeed||1)+1;state.builder.aiLayouts=[];state.builder.aiLayoutId=null;state.builder.aiLayoutSignature="";state.builder.aiSource=null;state.builder.aiError="";clearPackingImage();save();toast("Đang chuẩn bị một phương án mới theo đúng kích thước.");return render();}
-  if(a==="clear-ai-key"){aiSessionKey="";toast("Đã xóa API key khỏi phiên trình duyệt.");return render();}
+  if(a==="clear-ai-key"){aiSessionKey="";aiImageSessionKey="";toast("Đã xóa toàn bộ API key khỏi phiên trình duyệt.");return render();}
   if(a==="add-ai-builder-cart"){const t=builderTotals(),layout=(state.builder.aiLayouts||[]).find(x=>x.id===state.builder.aiLayoutId);if(!t.lines.length||!t.pack||!layout)return toast("Hãy chọn một phương án xếp.");const report=validatePackingConfiguration(layout.configuration,t.pack,t.lines);if(!report.valid)return toast(report.messages[0]||"Phương án chưa vượt qua kiểm tra kích thước.");const materialTotal=packingMaterialTotal();addCartLine({type:"builder",name:state.builder.draftName||"Hộp tự tạo",unitPrice:t.total+materialTotal,summary:`${t.lines.reduce((n,l)=>n+l.qty,0)} món · ${t.pack.name} · mẫu ${layout.name}`,message:state.builder.message,aiPreviewGenerated:!!aiPackingImage,aiImageMeta:aiPackingImageMeta?structuredClone(aiPackingImageMeta):null,aiLayout:structuredClone(layout),configuration3d:structuredClone(layout.configuration),builder:structuredClone(state.builder)});resetBuilder();save();return navigate("/gio-hang");}
   if(a==="cart-qty"){ const l=state.cart.find(x=>x.id===el.dataset.id); if(!l)return; l.qty=Math.max(1,l.qty+Number(el.dataset.delta));save();return render(); }
   if(a==="remove-line"){ const i=state.cart.findIndex(x=>x.id===el.dataset.id); if(i<0)return; state.lastRemoved={line:state.cart[i],index:i};state.cart.splice(i,1);save();render();return toast("Đã xóa hộp khỏi giỏ.","undo-remove"); }
@@ -1090,7 +1913,58 @@ document.addEventListener("submit",e=>{
   if(e.target.id==="order-status-form"){e.preventDefault();if(!canAdmin("orders"))return;const fd=new FormData(e.target),order=state.orders.find(o=>o.reference===fd.get("reference")),next=String(fd.get("status")),allowed={"Chờ thanh toán":["Đã tiếp nhận","Đã hủy"],"Đã tiếp nhận":["Đang chuẩn bị","Đã hủy"],"Đang chuẩn bị":["Sẵn sàng giao","Đã hủy"],"Sẵn sàng giao":["Đang giao","Đã hủy"],"Đang giao":["Đã giao"],"Đã giao":[],"Đã hủy":[]};if(!order)return;if(next!==order.status&&!(allowed[order.status]||[]).includes(next))return toast(`Không thể chuyển trực tiếp từ “${order.status}” sang “${next}”.`);order.status=next;order.internalNote=String(fd.get("internalNote")||"");audit("Cập nhật đơn",`${order.reference}: ${next}`);save();toast("Đã cập nhật trạng thái đơn.");render();}
   if(e.target.id==="delivery-form"){e.preventDefault();if(!canAdmin("delivery"))return;const fd=new FormData(e.target),d=state.admin.delivery;d.zone=String(fd.get("zone"));d.fee=Number(fd.get("fee"));d.capacity=Number(fd.get("capacity"));d.holidays=String(fd.get("holidays")||"");d.slots=d.slots.map((s,i)=>({...s,label:String(fd.get(`slotLabel${i}`)),active:fd.get(`slotActive${i}`)==="on",full:fd.get(`slotFull${i}`)==="on"}));audit("Cập nhật giao hàng",`${d.zone} · ${money(d.fee)}`);save();toast("Checkout đã nhận cấu hình giao hàng mới.");render();}
   if(e.target.id==="settings-form"){e.preventDefault();if(!canAdmin("settings"))return;const fd=new FormData(e.target);state.admin.banner=String(fd.get("banner")||"");state.admin.campaign=String(fd.get("campaign")||"");state.admin.reminderDays=Number(fd.get("reminderDays")||7);audit("Cập nhật cài đặt","Nội dung cửa hàng và nhắc dịp");save();toast("Đã lưu cài đặt.");render();}
-  if(e.target.id==="ai-settings-form"){e.preventDefault();if(!canAdmin("settings"))return;const fd=new FormData(e.target),key=String(fd.get("apiKey")||"").trim(),endpoint=String(fd.get("endpoint")||"").trim(),model=String(fd.get("model")||"").trim(),imageEndpoint=String(fd.get("imageEndpoint")||"").trim(),imageModel=String(fd.get("imageModel")||"").trim(),recommendationPrompt=String(fd.get("recommendationPrompt")||"").trim(),packingPrompt=String(fd.get("packingPrompt")||"").trim(),imagePrompt=String(fd.get("imagePrompt")||"").trim(),enabled=fd.get("enabled")==="on";if((endpoint&&!model)||(!endpoint&&model))return toast("API tư vấn và model đọc JSON phải được nhập cùng nhau.");if((imageEndpoint&&!imageModel)||(!imageEndpoint&&imageModel))return toast("API tạo ảnh và model ảnh phải được nhập cùng nhau.");if(enabled&&!((endpoint&&model)||(imageEndpoint&&imageModel)))return toast("Hãy nhập ít nhất một cặp API và model.");if(!recommendationPrompt||!packingPrompt||!imagePrompt)return toast("Hãy nhập đủ ba prompt.");state.admin.ai={...state.admin.ai,enabled,endpoint,model,imageEndpoint,imageModel,imageSize:String(fd.get("imageSize")||"1536x1024"),imagePromptVersion:2,recommendationPrompt:recommendationPrompt||DEFAULT_AI_RECOMMENDATION_PROMPT,packingPrompt:packingPrompt||AI_PACKING_SYSTEM_PROMPT,imagePrompt:imagePrompt||DEFAULT_AI_IMAGE_PROMPT};if(key)aiSessionKey=key;audit("Cập nhật trung tâm AI",`${imageModel||model||"Chưa chọn model"} · ${state.admin.ai.enabled?"đang bật":"đang tắt"}`);save();toast(aiSessionKey?"Đã lưu cấu hình; API key chỉ tồn tại trong phiên này.":"Đã lưu API và ba prompt. Hãy nhập API key để chạy AI.");render();}
+  if(e.target.id==="ai-settings-form"){
+    e.preventDefault();
+    if(!canAdmin("settings"))return;
+    const fd=new FormData(e.target);
+    const key=String(fd.get("apiKey")||"").trim();
+    const imageKey=String(fd.get("imageApiKey")||"").trim();
+    const imageProvider=String(fd.get("imageProvider")||"cloudflare");
+    const endpoint=String(fd.get("endpoint")||"").trim();
+    const model=String(fd.get("model")||"").trim();
+    const temperature=parseFloat(fd.get("temperature"))||0.15;
+    const textModelPrompt=String(fd.get("textModelPrompt")||"").trim();
+    const repairPrompt=String(fd.get("repairPrompt")||"").trim();
+    const imageEndpoint=String(fd.get("imageEndpoint")||"").trim();
+    const imageModel=String(fd.get("imageModel")||"").trim();
+    const imagePrompt=String(fd.get("imagePrompt")||"").trim();
+    const imageSize=String(fd.get("imageSize")||"1024x768");
+    const recommendationPrompt=String(fd.get("recommendationPrompt")||"").trim();
+    const enabled=fd.get("enabled")==="on";
+
+    if((endpoint&&!model)||(!endpoint&&model)) return toast("Endpoint và Model của Text Model phải được nhập cùng nhau.");
+    if((imageEndpoint&&!imageModel)||(!imageEndpoint&&imageModel)) return toast("Worker endpoint và Model ảnh phải được nhập cùng nhau.");
+
+    state.admin.ai = {
+      ...state.admin.ai,
+      enabled,
+      endpoint,
+      model,
+      temperature,
+      textModelPrompt: textModelPrompt || TEXT_MODEL_PACKING_PROMPT,
+      repairPrompt: repairPrompt || TEXT_MODEL_REPAIR_PROMPT,
+      packingPrompt: textModelPrompt || TEXT_MODEL_PACKING_PROMPT,
+      imageProvider,
+      imageEndpoint: imageEndpoint || "https://goithuong-ai-image.nguyentriquan1805.workers.dev/",
+      imageModel: imageModel || "@cf/black-forest-labs/flux-2-klein-4b",
+      imageSize,
+      imagePrompt: imagePrompt || DEFAULT_AI_IMAGE_PROMPT,
+      recommendationPrompt: recommendationPrompt || DEFAULT_AI_RECOMMENDATION_PROMPT
+    };
+
+    if(key) aiSessionKey = key;
+    if(imageKey) aiImageSessionKey = imageKey;
+
+    // Secure audit - never logs keys
+    audit("Cập nhật trung tâm AI", `Text: ${model || "cục bộ"} · Ảnh: ${imageModel || "FLUX"} · ${enabled ? "bật" : "tắt"}`);
+    save();
+
+    const keyNotices = [];
+    if(aiSessionKey) keyNotices.push("Text Model Key");
+    if(aiImageSessionKey) keyNotices.push("FLUX Secret Key");
+    toast(keyNotices.length ? `Đã lưu cấu hình. Đang giữ ${keyNotices.join(" và ")} trong phiên duyệt (RAM).` : "Đã lưu cấu hình AI. Hãy nhập API key khi cần kích hoạt.");
+    render();
+  }
   if(e.target.id==="staff-form"){e.preventDefault();if(!canAdmin("settings"))return;const fd=new FormData(e.target),email=String(fd.get("email")||"").trim().toLowerCase();if(state.admin.staff.some(s=>s.email===email))return toast("Email này đã có trong danh sách nhân sự.");state.admin.staff.push({email,name:String(fd.get("name")),role:String(fd.get("role")),active:true});ADMIN_ROLES[email]={role:String(fd.get("role")),name:String(fd.get("name"))};audit("Cấp quyền nhân sự",email);save();render();}
   if(e.target.id==="checkout-form"){e.preventDefault();const fd=new FormData(e.target),address=String(fd.get("address")||""),cartError=validateCartForCheckout();if(cartError){document.querySelector("#checkout-error").textContent=cartError;return;}if(!state.checkout.slot){document.querySelector("#checkout-error").textContent="Hãy chọn một khung giao còn chỗ.";return;}if(/hà nội|đà nẵng|cần thơ/i.test(address)){document.querySelector("#checkout-error").textContent=`Địa chỉ nằm ngoài vùng ${state.admin.delivery.zone} đang cấu hình. Vui lòng liên hệ hỗ trợ.`;return;}const btn=document.querySelector("#place-order");btn.disabled=true;btn.textContent="Đang kiểm tra…";const pay=String(fd.get("payment")||"success");state.checkout={...state.checkout,...Object.fromEntries(fd),slot:state.checkout.slot,payment:pay};save();setTimeout(()=>{if(pay==="failed"){document.querySelector("#checkout-error").textContent="Thanh toán thử nghiệm thất bại. Không có đơn hoặc khoản thu nào được tạo.";btn.disabled=false;btn.textContent="Thử đặt đơn lại";return;}const reference="GT-"+Math.random().toString(36).slice(2,8).toUpperCase(),token=crypto.randomUUID(),total=cartSubtotal()+Number(state.admin.delivery.fee||0),order={reference,token,owner:owner(),lines:structuredClone(state.cart),buyerName:state.checkout.buyerName,buyerEmail:state.checkout.buyerEmail,buyerPhone:state.checkout.buyerPhone,receiverName:state.checkout.receiverName,receiverPhone:state.checkout.receiverPhone,address:state.checkout.address,note:state.checkout.note,date:state.checkout.date,slot:state.checkout.slot,deliveryFee:Number(state.admin.delivery.fee||0),total,payment:pay,status:pay==="pending"?"Chờ thanh toán":"Đã tiếp nhận",paymentLabel:pay==="pending"?"Thanh toán đang chờ":"Thanh toán thử nghiệm thành công",internalNote:"",createdAt:new Date().toISOString()};state.orders.push(order);consumeInventory(order.lines);audit("Tạo đơn mới",reference);state.cart=[];save();navigate(`/xac-nhan-don/${reference}?token=${token}`);},700);}
   if(e.target.id==="tracking-form"){e.preventDefault();const fd=new FormData(e.target),ref=String(fd.get("reference")||"").trim(),token=String(fd.get("token")||"").trim(),order=state.orders.find(o=>o.reference===ref&&o.token===token);if(!order){document.querySelector("#tracking-error").textContent="Không tìm thấy đơn với mã và token này.";return;}navigate(`/theo-doi-don?reference=${encodeURIComponent(ref)}&token=${encodeURIComponent(token)}`);}
