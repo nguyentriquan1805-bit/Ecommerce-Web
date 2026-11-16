@@ -302,6 +302,37 @@ button { cursor: pointer; }
 .ai-config-card { border-top: 4px solid var(--wine); }
 .ai-config-card .status { white-space: nowrap; }
 .ai-prompt-field { min-height: 420px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .76rem; line-height: 1.55; tab-size: 2; }
+.prompt-stack { display: grid; gap: 18px; margin-top: 26px; }
+.prompt-stack .ai-prompt-field { min-height: 240px; }
+.ai-layout-grid.single-layout { grid-template-columns: minmax(0,760px); justify-content: center; }
+
+.finder-ai-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 22px; margin-bottom: 28px; padding: 18px 20px; border: 1px solid var(--line); background: var(--paper); }
+.finder-ai-toolbar p { margin: 4px 0 0; }
+.ai-gift-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 24px; }
+.ai-gift-card { overflow: hidden; border: 1px solid var(--line); border-radius: 7px; background: var(--paper); box-shadow: 0 14px 32px rgba(54,42,40,.06); }
+.ai-gift-card:last-child:nth-child(odd) { grid-column: 1 / -1; width: calc(50% - 12px); justify-self: center; }
+.ai-gift-visual { position: relative; min-height: 310px; overflow: hidden; background-color: #e8ded1; background-position: center; background-size: cover; }
+.ai-gift-visual.has-image::after { content:""; position:absolute; inset:0; background: linear-gradient(180deg,transparent 55%,rgba(30,21,18,.58)); }
+.ai-gift-visual > span { position: absolute; z-index: 2; right: 14px; bottom: 12px; padding: 5px 9px; border-radius: 999px; background: rgba(255,253,250,.9); color: var(--wine); font-size: .67rem; font-weight: 700; }
+.ai-gift-visual.generated-layout { border: 22px solid #c8a170; box-shadow: inset 0 0 0 2px rgba(75,49,33,.18); }
+.ai-gift-visual.generated-layout::before { content:""; position:absolute; inset:0; background: repeating-linear-gradient(45deg,rgba(255,255,255,.15) 0 2px,transparent 2px 8px); }
+.ai-gift-visual.generated-layout > b { position:absolute; left:14px; top:12px; color:rgba(64,43,34,.58); font-size:.7rem; letter-spacing:.08em; text-transform:uppercase; }
+.ai-gift-visual.generated-layout > i { position:absolute; left:var(--x); top:var(--y); width:25%; min-height:76px; display:grid; place-items:center; transform:rotate(var(--r)); padding:8px; border:1px solid rgba(70,49,43,.22); border-radius:8px; background:#fffaf1; box-shadow:0 8px 14px rgba(64,42,35,.12); color:#59453e; font-style:normal; font-size:.68rem; text-align:center; }
+.tone-sage { background-color:#cbd3c3; }.tone-blush { background-color:#ead1d2; }.tone-wine { background-color:#c8a9aa; }.tone-cream { background-color:#eadfc8; }
+.ai-gift-card-body { display: grid; gap: 13px; padding: 22px; }
+.ai-gift-card-body h2, .ai-gift-card-body p { margin: 0; }
+.ai-gift-card-body ul { display:grid; gap:5px; margin:0; padding-left:18px; color:var(--muted); font-size:.82rem; }
+.ai-gift-card-body .button { width: 100%; margin-top: 4px; }
+
+.library-intro { display:flex; align-items:center; justify-content:space-between; gap:28px; border-top:4px solid var(--wine); }
+.library-intro h2 { margin-bottom:8px; }
+.reference-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; margin-top:18px; }
+.reference-card { overflow:hidden; border:1px solid var(--line); border-radius:6px; background:var(--paper); }
+.reference-card.inactive { opacity:.58; }
+.reference-card > img { width:100%; aspect-ratio:4/3; object-fit:cover; background:var(--stone); }
+.reference-card > div { display:grid; gap:9px; padding:14px; }
+.reference-card h3, .reference-card p { margin:0; }
+.reference-card p, .reference-card small { color:var(--muted); font-size:.75rem; }
 
 .packing-page { padding: 30px 0 0; background: var(--paper); }
 .packing-progress { width: min(calc(100% - 40px), var(--max)); margin: 0 auto 22px; }
@@ -583,6 +614,11 @@ button { cursor: pointer; }
   .ai-api-note > span { width: 40px; height: 40px; }
   .ai-api-note .button { grid-column: 1 / -1; width: 100%; }
   .ai-layout-grid { grid-template-columns: 1fr; }
+  .ai-gift-grid, .reference-grid { grid-template-columns: 1fr; }
+  .ai-gift-card:last-child:nth-child(odd) { grid-column: auto; width: 100%; }
+  .finder-ai-toolbar, .library-intro { align-items: stretch; flex-direction: column; }
+  .finder-ai-toolbar .row { width: 100%; }
+  .finder-ai-toolbar .button { flex: 1; }
   .ai-layout-footer { bottom: 8px; align-items: stretch; flex-direction: column; }
   .ai-layout-footer > div, .ai-layout-footer .row { width: 100%; }
   .ai-layout-footer .button { flex: 1; }
