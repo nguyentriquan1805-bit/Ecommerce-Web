@@ -131,7 +131,7 @@ YÊU CẦU
 CHỈ TRẢ VỀ JSON HỢP LỆ, KHÔNG THÊM MARKDOWN:
 {"recommendations":[{"boxId":"box-01","reason":"Phù hợp vì..."},{"boxId":"box-02","reason":"Phù hợp vì..."},{"boxId":"box-03","reason":"Phù hợp vì..."},{"boxId":"box-04","reason":"Phù hợp vì..."},{"boxId":"box-05","reason":"Phù hợp vì..."}]}`;
 
-const TEXT_MODEL_PACKING_PROMPT=`Bạn là kỹ sư bố trí hộp quà. Hãy tạo đúng một phương án xếp sản phẩm dựa trên kích thước millimet thật.
+const TEXT_MODEL_PACKING_PROMPT=`Bạn là KỸ SƯ BỐ TRÍ HỘP QUÀ, không phải AI tạo ảnh. Hệ thống đã thử từng hộp bằng hình học thật và cung cấp một baselineLayout hợp lệ. Nhiệm vụ của bạn là kiểm tra rồi chỉ tinh chỉnh baseline đó thành đúng MỘT phương án đẹp hơn, nhưng tuyệt đối không phá vỡ số đo millimet.
 
 Quy tắc bắt buộc:
 
@@ -142,11 +142,14 @@ Quy tắc bắt buộc:
 5. Phải tính độ dày của giấy lót và vật liệu chèn.
 6. Phải còn đủ khoảng trống để đóng nắp.
 7. Mặt chính của tất cả sản phẩm phải hướng lên.
-8. Chỉ xoay sản phẩm trên mặt đáy theo 0 hoặc 90 độ.
+8. Chỉ xoay sản phẩm trên mặt đáy theo 0 hoặc 90 độ. Trục tọa độ có gốc ở tâm đáy hộp: +X sang phải, +Z về phía dưới ảnh chụp từ trên xuống.
 9. Không lật úp, dựng nghiêng hoặc thu nhỏ sản phẩm.
 10. Món nặng ưu tiên gần tâm và gần đáy.
 11. Món dễ vỡ không được chịu tải.
-12. Nếu không thể xếp hợp lệ, trả status="impossible".
+12. Giữ khoảng hở giữa các món tương đối đều (ưu tiên 8–18 mm), cụm sản phẩm cân giữa hộp và tránh một vùng trống lớn vô lý.
+13. Không được đổi boxId; không dùng tọa độ ngoài hộp; không tự co giãn kích thước.
+14. baselineLayout đã qua bộ kiểm tra va chạm. Nếu không chắc phương án sửa tốt hơn thì trả lại nguyên tọa độ của baselineLayout.
+15. Nếu không thể xếp hợp lệ, trả status="impossible".
 
 Chỉ trả JSON hợp lệ, không thêm Markdown hoặc lời giải thích bên ngoài JSON.
 
@@ -199,7 +202,7 @@ Hãy sửa đúng một phương án. Không thay đổi sản phẩm, số lư�
 
 const DEFAULT_AI_PACKING_PROMPT=TEXT_MODEL_PACKING_PROMPT;
 
-const DEFAULT_AI_IMAGE_PROMPT=`Tạo đúng 1 ẢNH CHỤP SẢN PHẨM HOÀN THIỆN của hộp quà đang mở, nhìn từ trên xuống hơi chếch nhẹ, phong cách thương mại điện tử cao cấp, ánh sáng studio mềm và chất liệu chân thật.
+const DEFAULT_AI_IMAGE_PROMPT=`Tạo đúng 1 ẢNH CHỤP SẢN PHẨM HOÀN THIỆN của hộp quà đang mở theo góc TOP-DOWN 90 ĐỘ TUYỆT ĐỐI: camera nằm thẳng ngay phía trên tâm hộp, trục ống kính vuông góc với đáy hộp, không chụp xéo, không góc nghiêng, không phối cảnh ba phần tư. Bốn cạnh lòng hộp phải song song với bốn cạnh ảnh. Phong cách thương mại điện tử cao cấp, ánh sáng studio mềm và chất liệu chân thật.
 
 ẢNH THAM CHIẾU SẢN PHẨM
 - Mỗi ảnh đính kèm là ảnh nhận diện bắt buộc của đúng một sản phẩm được ghi tên ngay trước ảnh đó.
@@ -211,9 +214,11 @@ RÀNG BUỘC BẮT BUỘC
 2. Dùng đúng kiểu hộp, màu hộp, giấy lót, vật liệu chèn lót, thiệp và ruy băng khách đã chọn.
 3. Xếp các món theo bố cục đã kiểm tra kích thước: không chồng xuyên nhau, không nổi lơ lửng, không che kín mặt chính và không vượt khỏi lòng hộp.
 4. Giữ đúng TỈ LỆ KÍCH THƯỚC TƯƠNG ĐỐI giữa từng món và lòng hộp theo số đo millimet được cung cấp; món lớn phải trông lớn hơn món nhỏ đúng tương quan, không tự co giãn để làm ảnh đẹp.
-5. Cho thấy đây là một hộp quà thật đã được nhân viên chuẩn bị: vật liệu chèn nằm tự nhiên quanh món, nắp hộp mở hoặc đặt cạnh hộp, nền gỗ/vải trung tính gọn gàng.
+5. Cho thấy đây là một hộp quà thật đã được nhân viên chuẩn bị: vật liệu chèn chỉ lấp phần trống quanh món và không che mặt nhãn. Nắp hộp nằm ngoài khung hình để không che bố cục. Nền trung tính rất ít lộ ra quanh hộp.
 6. Không tạo sơ đồ, collage, wireframe, mô hình 3D thô, nhãn số, chú thích, mũi tên, chữ phủ trên ảnh, bàn tay, kéo hoặc vật thể trang trí không được chọn.
 7. Không bịa logo hoặc chữ mới. Chỉ giữ chữ/nhãn vốn có trong ảnh sản phẩm tham chiếu nếu có thể tái hiện chính xác.
+8. Hộp phải giữ đúng tỉ lệ dài:rộng theo kích thước lòng hộp. Vị trí và diện tích chiếm chỗ của từng món phải theo phần trăm tọa độ được cung cấp; không tự dồn lại hoặc tản ra.
+9. Camera bắt buộc top-down 90° trực diện. Cấm camera xiên, góc 45°, isometric, nhìn thấy mặt ngoài thành hộp quá nhiều hoặc đường hội tụ phối cảnh.
 
 Kết quả phải là một ảnh duy nhất tỉ lệ ngang 4:3, đủ chân thật để khách dùng làm ảnh xem trước thành phẩm trước khi thêm vào giỏ.`;
 
@@ -294,7 +299,7 @@ function ensureAdminState(){
   if(!state.admin.delivery?.slots?.length) state.admin.delivery={zone:"TP.HCM",fee:45000,capacity:12,slots:[{id:"morning",label:"9–12h",active:true,full:false},{id:"afternoon",label:"14–17h",active:true,full:true},{id:"evening",label:"18–21h",active:true,full:false}],holidays:""};
   const savedAi=state.admin.ai||{}, legacyPrompt=String(savedAi.packingPrompt||savedAi.prompt||"");
   state.admin.ai={
-    enabled:true,endpoint:"",model:"",imageProvider:"cloudflare",imageEndpoint:"https://goithuong-ai-image.nguyentriquan1805.workers.dev/",imageModel:"@cf/black-forest-labs/flux-2-klein-4b",imageSize:"1024x768",imagePromptVersion:3,
+    enabled:true,endpoint:"",model:"",imageProvider:"cloudflare",imageEndpoint:"https://goithuong-ai-image.nguyentriquan1805.workers.dev/",imageModel:"@cf/black-forest-labs/flux-2-klein-4b",imageSize:"1024x768",textPromptVersion:2,imagePromptVersion:4,
     temperature:0.15,
     recommendationPrompt:DEFAULT_AI_RECOMMENDATION_PROMPT,
     textModelPrompt:TEXT_MODEL_PACKING_PROMPT,
@@ -306,13 +311,13 @@ function ensureAdminState(){
   if(!state.admin.ai.imageProvider) state.admin.ai.imageProvider="cloudflare";
   if(!state.admin.ai.imageEndpoint) state.admin.ai.imageEndpoint="https://goithuong-ai-image.nguyentriquan1805.workers.dev/";
   if(!state.admin.ai.imageModel) state.admin.ai.imageModel="@cf/black-forest-labs/flux-2-klein-4b";
-  if(!state.admin.ai.textModelPrompt) state.admin.ai.textModelPrompt=TEXT_MODEL_PACKING_PROMPT;
+  if(!state.admin.ai.textModelPrompt||Number(savedAi.textPromptVersion||0)<2){state.admin.ai.textModelPrompt=TEXT_MODEL_PACKING_PROMPT;state.admin.ai.packingPrompt=TEXT_MODEL_PACKING_PROMPT;state.admin.ai.textPromptVersion=2;}
   if(!state.admin.ai.repairPrompt) state.admin.ai.repairPrompt=TEXT_MODEL_REPAIR_PROMPT;
   if(state.admin.ai.temperature===undefined) state.admin.ai.temperature=0.15;
   state.admin.ai.enabled=true;
   if(!state.admin.ai.recommendationPrompt)state.admin.ai.recommendationPrompt=DEFAULT_AI_RECOMMENDATION_PROMPT;
   if(!state.admin.ai.packingPrompt||/đúng 5 phương án|five layouts|năm phương án/i.test(state.admin.ai.packingPrompt))state.admin.ai.packingPrompt=TEXT_MODEL_PACKING_PROMPT;
-  if(!state.admin.ai.imagePrompt||Number(savedAi.imagePromptVersion||0)<2){state.admin.ai.imagePrompt=DEFAULT_AI_IMAGE_PROMPT;state.admin.ai.imagePromptVersion=3;}
+  if(!state.admin.ai.imagePrompt||Number(savedAi.imagePromptVersion||0)<4){state.admin.ai.imagePrompt=DEFAULT_AI_IMAGE_PROMPT;state.admin.ai.imagePromptVersion=4;}
   if(!Array.isArray(state.admin.aiReferences))state.admin.aiReferences=[];
   state.finder={...structuredClone(DEFAULT_STATE.finder),...(state.finder||{})};
   if(state.user&&!state.user.role) state.user.role=ADMIN_ROLES[state.user.email]?.role||"customer";
@@ -548,11 +553,17 @@ function builderPage(){
   pageTitle("Tự tạo hộp");
   if(!state.user) return `<section class="page-hero"><div class="container"><span class="eyebrow">Tự tạo hộp</span><h1>Mỗi món một chút, thành một hộp rất riêng.</h1><p>Xem trước 20 món demo có ảnh, giá và kích thước đóng gói. Đăng nhập trước khi bắt đầu chọn để bản nháp và dữ liệu riêng không bị lẫn.</p><button class="button" data-action="gate-builder">Đăng nhập để bắt đầu</button></div></section><section class="section"><div class="container"><div class="item-list">${giftItems.map(i=>`<article class="item-row">${itemArt(i)}<h3>${esc(i.name)}</h3><span class="small muted">${esc(i.category)} · ${money(i.price)}</span><span class="item-spec">${i.model3d.length} × ${i.model3d.width} × ${i.model3d.height} mm · ${i.model3d.weight} g</span></article>`).join("")}</div></div></section>`;
   const b=state.builder,t=builderTotals();
-  return `<section class="page-hero"><div class="container"><span class="eyebrow">Tự tạo hộp</span><h1>Tự tạo một hộp quà.</h1><p>Chọn món, hộp và vật liệu chèn lót; hệ thống sẽ chuẩn bị một cách xếp tốt nhất.</p></div></section><section class="section"><div class="container"><div class="steps builder-five-steps">${["Chọn món","Hộp & chèn lót","Thiệp & trang trí","Xem lại","AI gợi ý xếp"].map((n,i)=>`<button class="step ${b.step===i+1?"active":""}" data-action="builder-step" data-step="${i+1}" ${i+1>b.step||i===4?"disabled":""}>${i+1} · ${n}</button>`).join("")}</div><div class="builder-shell"><div class="builder-main">${builderStep()}</div><aside class="builder-summary">${builderSummary()}</aside></div><div class="mobile-builder-bar"><div><span class="small">${t.lines.reduce((n,l)=>n+l.qty,0)} món</span><br><strong>${money(t.total+builderMaterialTotal())}</strong></div><button class="button small-btn" data-action="builder-next">${b.step===4?"Xem cách xếp":"Tiếp tục"}</button></div></div></section>`;
+  return `<section class="page-hero"><div class="container"><span class="eyebrow">Tự tạo hộp</span><h1>Tự tạo một hộp quà.</h1><p>Chọn món trước; hệ thống thử xếp theo kích thước thật để đề xuất hộp vừa đẹp, rồi mới tạo ảnh thành phẩm.</p></div></section><section class="section"><div class="container"><div class="steps builder-five-steps">${["Chọn món","Hộp vừa đẹp","Thiệp & trang trí","Xem lại","Ảnh thật top-down"].map((n,i)=>`<button class="step ${b.step===i+1?"active":""}" data-action="builder-step" data-step="${i+1}" ${i+1>b.step||i===4?"disabled":""}>${i+1} · ${n}</button>`).join("")}</div><div class="builder-shell"><div class="builder-main">${builderStep()}</div><aside class="builder-summary">${builderSummary()}</aside></div><div class="mobile-builder-bar"><div><span class="small">${t.lines.reduce((n,l)=>n+l.qty,0)} món</span><br><strong>${money(t.total+builderMaterialTotal())}</strong></div><button class="button small-btn" data-action="builder-next">${b.step===4?"Xem bố cục & ảnh":"Tiếp tục"}</button></div></div></section>`;
 }
 function builderStep(){ const b=state.builder,t=builderTotals();
   if(b.step===1) return `<div class="row spaced wrap"><div><h2>Chọn những món bạn muốn gửi</h2><p class="muted">20 sản phẩm demo đã có ảnh chính và kích thước thật để thử AI xếp hộp.</p></div><div class="field" style="margin:0"><label for="builder-budget">Ngân sách hộp</label><input id="builder-budget" type="number" min="100000" step="50000" value="${b.budget}" style="max-width:180px"></div></div>${t.total>b.budget?`<p class="notice error">Đang vượt ngân sách ${money(t.total-b.budget)}. Chúng mình không tự xóa món của bạn.</p>`:`<p class="notice">Còn khoảng ${money(b.budget-t.total)} trong ngân sách.</p>`}<div class="item-list">${giftItems.map(i=>{const n=b.items[i.id]||0,m=i.model3d; return `<article class="item-row">${itemArt(i)}<h3>${esc(i.name)}</h3><span class="small muted">${esc(i.category)} · ${i.size} đơn vị</span><span class="item-spec">${m.length} × ${m.width} × ${m.height} mm · ${m.weight} g${m.fragile?" · Dễ vỡ":""}</span><span class="price small">${money(i.price)}</span>${i.stock===0?'<p class="small muted">Tạm hết hàng</p>':`<div class="qty"><button aria-label="Giảm ${esc(i.name)}" data-action="builder-qty" data-id="${i.id}" data-delta="-1">−</button><span>${n}</span><button aria-label="Thêm ${esc(i.name)}" data-action="builder-qty" data-id="${i.id}" data-delta="1">+</button></div>`}${i.lead>2?`<p class="fine-print">Cần ${i.lead} ngày chuẩn bị</p>`:""}</article>`}).join("")}</div><div class="row spaced" style="margin-top:34px"><button class="button secondary" data-action="save-draft">Lưu bản nháp</button><button class="button" data-action="builder-next" ${t.lines.length?"":"disabled"}>Chọn hộp</button></div>`;
-  if(b.step===2) return `<div class="row spaced wrap"><div><span class="eyebrow">Bao bì do Gói Thương quản lý</span><h2>Chọn hộp và lớp bảo vệ</h2><p class="muted">Bạn đã chọn ${t.size} đơn vị dung lượng. Hộp không đủ chỗ sẽ bị khóa; độ dày chèn lót được tính vào không gian đóng gói.</p></div><span class="pack-catalog-count">${packaging.length} hộp · ${(state.admin.materials3d||[]).filter(x=>x.active!==false).length} vật liệu</span></div><h3 class="builder-subhead">1. Kiểu hộp</h3><div class="packaging-choice-grid">${packaging.map(p=>{const ok=p.capacity>=t.size,selected=b.packaging===p.id; return `<label class="package-option ${selected?"selected":""} ${ok?"":"disabled"}"><input type="radio" name="package" value="${p.id}" ${selected?"checked":""} ${ok?"":"disabled"}>${assetThumb("packaging",p)}<span class="package-copy"><strong>${p.name}</strong><small>${p.finish||p.color}</small><small>Lòng hộp ${p.innerLength} × ${p.innerWidth} × ${p.innerHeight} mm</small>${ok?`<em>Phù hợp ${t.size}/${p.capacity} đơn vị</em>`:'<em class="danger-text">Không đủ dung lượng</em>'}</span><span class="price">${money(p.price)}</span></label>`}).join("")}</div><h3 class="builder-subhead material-heading">2. Vật liệu chèn lót</h3><p class="muted small">Có thể chọn nhiều loại. Hệ thống sẽ tính tất cả khi tạo một phương án cuối.</p><div class="material-choice-grid">${(state.admin.materials3d||[]).filter(material=>material.active!==false).map(material=>`<label class="material-choice ${b.materials?.[material.id]?"selected":""}" style="--material-color:${material.color}"><input type="checkbox" data-builder-material="${material.id}" ${b.materials?.[material.id]?"checked":""}><span class="material-choice-art material-kind-${material.kind}"><i></i></span><span><strong>${esc(material.name)}</strong><small>${esc(material.description||"")}</small><em>Dày ${material.thickness} mm · ${money(material.price)}</em></span></label>`).join("")}</div><div class="material-selection-note"><span>Đang chọn <strong>${selectedBuilderMaterials().length}</strong> loại chèn lót</span><span>Phụ phí <strong>${money(builderMaterialTotal())}</strong></span></div><div class="row spaced" style="margin-top:30px"><button class="button ghost" data-action="builder-back">Quay lại chọn món</button><button class="button" data-action="builder-next" ${b.packaging?"":"disabled"}>Thiệp & trang trí</button></div>`;
+  if(b.step===2){
+    const fits=analyzeBoxFits(t.lines),recommended=fits.find(x=>x.recommended),chosen=fits.find(x=>x.box.id===b.packaging);
+    return `<div class="row spaced wrap"><div><span class="eyebrow">Thử xếp bằng kích thước mm thật</span><h2>Chọn hộp vừa vặn, không lọt thỏm</h2><p class="muted">Hệ thống đã thử xoay 0°/90°, kiểm tra va chạm, khoảng hở và nắp cho từng hộp. Hộp đề xuất là phương án cân bằng giữa vừa chỗ và đủ khoảng chèn lót.</p></div><span class="pack-catalog-count">${packaging.length} hộp · ${(state.admin.materials3d||[]).filter(x=>x.active!==false).length} vật liệu</span></div>
+    ${recommended?`<div class="box-recommendation"><div><span class="eyebrow">Hộp hệ thống đề xuất</span><strong>${esc(recommended.box.name)} · ${esc(recommended.label)}</strong><p>${esc(recommended.reason)}. Đây là kết quả thử xếp thật, không phải ước lượng dung lượng.</p></div><button class="button small-btn" data-action="use-recommended-box" data-id="${recommended.box.id}">${b.packaging===recommended.box.id?"Đang dùng hộp này":"Dùng hộp đề xuất"}</button></div>`:`<div class="notice error">Không hộp nào hiện có chứa được toàn bộ món theo kích thước thật. Hãy giảm món hoặc vật liệu chèn.</div>`}
+    <h3 class="builder-subhead">1. Hộp đã thử bố cục</h3><div class="packaging-choice-grid">${fits.map(fit=>{const p=fit.box,ok=!!fit.layout,selected=b.packaging===p.id;return `<label class="package-option ${selected?"selected":""} ${fit.recommended?"recommended":""} ${ok?"":"disabled"}"><input type="radio" name="package" value="${p.id}" ${selected?"checked":""} ${ok?"":"disabled"}>${assetThumb("packaging",p)}<span class="package-copy"><span class="package-fit-badges">${fit.recommended?'<b>Đề xuất</b>':""}<i class="fit-${fit.status}">${esc(fit.label)}</i></span><strong>${p.name}</strong><small>${p.finish||p.color}</small><small>Lòng hộp ${p.innerLength} × ${p.innerWidth} × ${p.innerHeight} mm</small><em class="${ok?"":"danger-text"}">${esc(fit.reason)}</em></span><span class="price">${money(p.price)}</span></label>`}).join("")}</div>
+    <h3 class="builder-subhead material-heading">2. Vật liệu chèn lót</h3><p class="muted small">Có thể chọn nhiều loại. Mỗi thay đổi sẽ khiến hệ thống thử xếp lại và cập nhật hộp đề xuất.</p><div class="material-choice-grid">${(state.admin.materials3d||[]).filter(material=>material.active!==false).map(material=>`<label class="material-choice ${b.materials?.[material.id]?"selected":""}" style="--material-color:${material.color}"><input type="checkbox" data-builder-material="${material.id}" ${b.materials?.[material.id]?"checked":""}><span class="material-choice-art material-kind-${material.kind}"><i></i></span><span><strong>${esc(material.name)}</strong><small>${esc(material.description||"")}</small><em>Dày ${material.thickness} mm · ${money(material.price)}</em></span></label>`).join("")}</div><div class="material-selection-note"><span>Đang chọn <strong>${selectedBuilderMaterials().length}</strong> loại chèn lót</span><span>${chosen?.layout?`Hộp đã chọn: <strong>${esc(chosen.label)}</strong>`:"Hãy chọn hộp xếp được"}</span><span>Phụ phí <strong>${money(builderMaterialTotal())}</strong></span></div><div class="row spaced" style="margin-top:30px"><button class="button ghost" data-action="builder-back">Quay lại chọn món</button><button class="button" data-action="builder-next" ${chosen?.layout?"":"disabled"}>Thiệp & trang trí</button></div>`;
+  }
   if(b.step===3){const selectedCard=cards.find(x=>x.id===b.card),selectedRibbon=ribbons.find(x=>x.id===b.ribbon);return `<h2>Viết điều bạn muốn gửi</h2><div class="choice-preview-grid">${choicePreview("cards",selectedCard)}${choicePreview("ribbons",selectedRibbon)}</div><div class="form-grid"><div class="field"><label for="b-card">Mẫu thiệp</label><select id="b-card">${cards.map(x=>`<option value="${x.id}" ${b.card===x.id?"selected":""}>${x.name} ${x.price?"+ "+money(x.price):"· đã gồm"}</option>`).join("")}</select></div><div class="field"><label for="b-ribbon">Ruy băng</label><select id="b-ribbon">${ribbons.map(x=>`<option value="${x.id}" ${b.ribbon===x.id?"selected":""}>${x.name} ${x.price?"+ "+money(x.price):"· đã gồm"}</option>`).join("")}</select></div><div class="field"><label for="b-recipient">Tên người nhận</label><input id="b-recipient" maxlength="40" value="${esc(b.recipient)}"></div><div class="field"><label for="b-sender">Tên người gửi</label><input id="b-sender" maxlength="40" value="${esc(b.sender)}" ${b.anonymous?"disabled":""}></div></div><label class="checkline"><input id="b-anonymous" type="checkbox" ${b.anonymous?"checked":""}> Không ghi tên người gửi trên thiệp</label><div class="field"><label for="b-message">Lời chúc <span class="muted">(${b.message.length}/250)</span></label><textarea id="b-message" maxlength="250">${esc(b.message)}</textarea></div><div class="card-preview card-style-${esc(b.card)}">${b.message?esc(b.message):"Lời chúc của bạn sẽ hiện ở đây."}</div><p class="fine-print">Shop vẫn cần thông tin người mua để xử lý đơn. Bản xem trước chỉ mô phỏng bố cục.</p><div class="row spaced"><button class="button ghost" data-action="builder-back">Quay lại chọn hộp</button><button class="button" data-action="builder-next">Xem lại</button></div>`;}
   return `<h2>Kiểm tra lựa chọn trước khi tạo gợi ý</h2><p class="muted">Hệ thống dùng ảnh chính và kích thước thật để chuẩn bị một phương án tốt nhất. Mặt chính của mọi món luôn hướng lên trên.</p><div class="summary-lines">${t.lines.map(l=>`<div class="summary-line"><span>${l.qty} × ${l.item.name}</span><span>${money(l.item.price*l.qty)}</span></div>`).join("")}<div class="summary-line"><span>${t.pack?.name||"Chưa chọn hộp"}</span><span>${money(t.pack?.price||0)}</span></div>${selectedBuilderMaterials().map(material=>`<div class="summary-line"><span>${material.name}</span><span>${money(material.price)}</span></div>`).join("")}<div class="summary-line"><span>${t.card?.name}</span><span>${money(t.card?.price||0)}</span></div><div class="summary-line"><span>${t.ribbon?.name}</span><span>${money(t.ribbon?.price||0)}</span></div></div><div class="card-preview">${b.message?esc(b.message):"Thiệp chưa có lời chúc"}</div><div class="field" style="margin-top:24px"><label for="draft-name">Tên hộp để dễ tìm lại</label><input id="draft-name" maxlength="60" value="${esc(b.draftName)}"></div><div class="notice">Phương án cuối sẽ lưu cùng đơn để người bán đóng gói theo đúng thứ tự và vị trí.</div><div class="row spaced wrap" style="margin-top:24px"><button class="button secondary" data-action="save-draft">Lưu bản nháp</button><div class="row"><button class="button ghost" data-action="builder-back">Sửa thiệp</button><button class="button" data-action="open-ai-layouts">Tạo cách xếp →</button></div></div>`;
 }
@@ -570,7 +581,16 @@ const AI_LAYOUT_STYLES=[
 ];
 const AI_PACKING_SYSTEM_PROMPT=DEFAULT_AI_PACKING_PROMPT;
 
-function aiPromptInput(box,lines){return {box:{id:box.id,innerLength:box.innerLength,innerWidth:box.innerWidth,innerHeight:box.innerHeight,maxWeight:box.maxWeight,lidClearance:box.lidClearance},materials:selectedBuilderMaterials().map(x=>({id:x.id,name:x.name,kind:x.kind,thickness:x.thickness})),products:lines.map(line=>{const image=line.item.images?.find(x=>x.cover)?.data||line.item.model3d?.textureData||"";return {productId:line.item.id,name:line.item.name,quantity:line.qty,mainImage:image?new URL(image,location.origin).href:"",dimensions:{length:line.item.model3d?.length,width:line.item.model3d?.width,height:line.item.model3d?.height},weight:line.item.model3d?.weight,padding:line.item.model3d?.padding,fragile:!!line.item.model3d?.fragile,canSupport:!!line.item.model3d?.canSupport,maxLoad:line.item.model3d?.maxLoad,primaryFace:"top",allowedRotation:"horizontal-only"};})};}
+function layoutBlueprint(layout,box){
+  if(!layout)return null;
+  return {
+    coordinateSystem:{origin:"center of inner box floor",xAxis:"positive right",zAxis:"positive toward bottom of final top-down image",units:"mm"},
+    boxId:box.id,
+    placements:layout.configuration.instances.map(instance=>({productId:instance.productId,quantityIndex:layout.configuration.instances.filter(x=>x.productId===instance.productId).indexOf(instance),xMm:Math.round(instance.x*10)/10,zMm:Math.round(instance.z*10)/10,rotationYDeg:Math.abs(Math.round(Number(instance.rotY||0)/90))%2?90:0,mainFace:"up"})),
+    quality:layout.metrics||layoutQualityMetrics(layout,box)
+  };
+}
+function aiPromptInput(box,lines,baselineLayout=null){return {box:{id:box.id,innerLength:box.innerLength,innerWidth:box.innerWidth,innerHeight:box.innerHeight,maxWeight:box.maxWeight,lidClearance:box.lidClearance},materials:selectedBuilderMaterials().map(x=>({id:x.id,name:x.name,kind:x.kind,thickness:x.thickness})),products:lines.map(line=>{const image=line.item.images?.find(x=>x.cover)?.data||line.item.model3d?.textureData||"";return {productId:line.item.id,name:line.item.name,quantity:line.qty,mainImage:image?new URL(image,location.origin).href:"",dimensions:{length:line.item.model3d?.length,width:line.item.model3d?.width,height:line.item.model3d?.height},weight:line.item.model3d?.weight,padding:line.item.model3d?.padding,fragile:!!line.item.model3d?.fragile,canSupport:!!line.item.model3d?.canSupport,maxLoad:line.item.model3d?.maxLoad,primaryFace:"top",allowedRotation:"0-or-90-degrees-only"};}),baselineLayout:layoutBlueprint(baselineLayout,box)};}
 
 function aiFloorHeight(){return selectedBuilderMaterials().filter(x=>x.kind==="liner"||x.kind==="fiber").reduce((sum,x)=>sum+Number(x.thickness||0),0);}
 function aiPlacedDimensions(instance){const turn=Math.abs(Math.round(Number(instance.rotY||0)/90))%2;return turn?{length:Number(instance.profile.width),width:Number(instance.profile.length),height:Number(instance.profile.height)}:{length:Number(instance.profile.length),width:Number(instance.profile.width),height:Number(instance.profile.height)};}
@@ -619,7 +639,8 @@ function buildAiLayout(style,styleIndex,box,lines){
   cfg.instances=placed;cfg.selectedId=null;cfg.updatedAt=new Date().toISOString();
   const report=validatePackingConfiguration(cfg,box,lines);if(!report.valid)return null;
   const definition=AI_LAYOUT_STYLES.find(x=>x.id===style);
-  return {id:`${style}-${state.builder.aiSeed||1}`,strategy:style,name:definition.name,description:definition.description,badge:definition.badge,faceRule:"Mặt chính luôn hướng lên",configuration:cfg,report,generatedAt:new Date().toISOString()};
+  const layout={id:`${style}-${state.builder.aiSeed||1}-${styleIndex}`,strategy:style,name:definition.name,description:definition.description,badge:definition.badge,faceRule:"Mặt chính luôn hướng lên",configuration:cfg,report,generatedAt:new Date().toISOString()};
+  layout.metrics=layoutQualityMetrics(layout,box);return layout;
 }
 function deriveAiLayout(base,style,styleIndex,box,lines){
   if(!base)return null;
@@ -629,11 +650,38 @@ function deriveAiLayout(base,style,styleIndex,box,lines){
   const definition=AI_LAYOUT_STYLES.find(x=>x.id===style);
   return {id:`${style}-${state.builder.aiSeed||1}`,strategy:style,name:definition.name,description:definition.description,badge:definition.badge,faceRule:"Mặt chính luôn hướng lên",configuration:cfg,report,generatedAt:new Date().toISOString()};
 }
+function layoutQualityMetrics(layout,box){
+  const instances=layout?.configuration?.instances||[],length=Number(box.innerLength),width=Number(box.innerWidth),boxArea=Math.max(1,length*width);
+  if(!instances.length)return {score:0,fillPercent:0,clusterPercent:0,centerOffsetPercent:100,averageGapMm:0,minEdgeMm:0,lidClearanceMm:Number(layout?.report?.lidClearanceMm||0)};
+  const rects=instances.map(instance=>{const d=aiPlacedDimensions(instance);return {x:instance.x,z:instance.z,length:d.length,width:d.width,left:instance.x-d.length/2,right:instance.x+d.length/2,top:instance.z-d.width/2,bottom:instance.z+d.width/2};});
+  const minX=Math.min(...rects.map(x=>x.left)),maxX=Math.max(...rects.map(x=>x.right)),minZ=Math.min(...rects.map(x=>x.top)),maxZ=Math.max(...rects.map(x=>x.bottom));
+  const itemArea=rects.reduce((sum,x)=>sum+x.length*x.width,0),clusterArea=Math.max(1,(maxX-minX)*(maxZ-minZ)),centerX=(minX+maxX)/2,centerZ=(minZ+maxZ)/2;
+  const edgeClearances=rects.flatMap(x=>[x.left+length/2,length/2-x.right,x.top+width/2,width/2-x.bottom]);
+  const nearest=rects.map((a,i)=>{if(rects.length===1)return 12;return Math.min(...rects.filter((_,j)=>j!==i).map(b=>{const gx=Math.max(0,Math.abs(a.x-b.x)-(a.length+b.length)/2),gz=Math.max(0,Math.abs(a.z-b.z)-(a.width+b.width)/2);return gx&&gz?Math.hypot(gx,gz):Math.max(gx,gz);}));});
+  const fill=itemArea/boxArea,cluster=clusterArea/boxArea,centerOffset=(Math.abs(centerX)/(length/2)+Math.abs(centerZ)/(width/2))/2,averageGap=nearest.reduce((a,b)=>a+b,0)/nearest.length,minEdge=Math.min(...edgeClearances),lid=Number(layout.report?.lidClearanceMm||0);
+  let score=100-Math.abs(fill-.48)*105-Math.abs(cluster-.64)*42-centerOffset*42-Math.min(22,Math.abs(averageGap-12)*1.15);
+  if(minEdge<4)score-=18;if(minEdge>30)score-=Math.min(12,(minEdge-30)*.3);if(lid<8)score-=25;
+  return {score:Math.round(Math.max(0,Math.min(100,score))*10)/10,fillPercent:Math.round(fill*100),clusterPercent:Math.round(cluster*100),centerOffsetPercent:Math.round(centerOffset*100),averageGapMm:Math.round(averageGap),minEdgeMm:Math.round(minEdge),lidClearanceMm:Math.round(lid)};
+}
+function findBestLayoutForBox(box,lines,variants=2){
+  const layouts=[];
+  AI_LAYOUT_STYLES.forEach((style,styleIndex)=>{for(let variant=0;variant<variants;variant++){const layout=buildAiLayout(style.id,styleIndex*11+variant*5,box,lines);if(layout)layouts.push(layout);}});
+  return layouts.sort((a,b)=>Number(b.metrics?.score||0)-Number(a.metrics?.score||0))[0]||null;
+}
+let boxFitCache={signature:"",fits:[]};
+function analyzeBoxFits(lines){
+  const signature=JSON.stringify({version:"physical-fit-v2",items:lines.map(x=>[x.item.id,x.qty]),materials:state.builder.materials,seed:state.builder.aiSeed||1,boxes:packaging.map(x=>[x.id,x.innerLength,x.innerWidth,x.innerHeight])});
+  if(boxFitCache.signature===signature)return boxFitCache.fits;
+  const raw=packaging.map(box=>{const layout=findBestLayoutForBox(box,lines,1);if(!layout)return {box,layout:null,status:"invalid",label:"Không xếp được",reason:"Các món không lọt lòng hộp theo kích thước mm thật",recommendationScore:-999};const m=layout.metrics,tooTight=m.fillPercent>72||m.minEdgeMm<3||m.lidClearanceMm<8,tooLoose=m.fillPercent<24;const status=tooTight?"tight":tooLoose?"loose":m.fillPercent>=32&&m.fillPercent<=68?"ideal":"fit";const label=status==="ideal"?"Vừa đẹp":status==="tight"?"Hơi chật":status==="loose"?"Quá rộng":"Xếp vừa";const adjustment=status==="ideal"?8:status==="fit"?2:status==="loose"?-15:-12;return {box,layout,status,label,reason:`Sản phẩm chiếm ${m.fillPercent}% đáy · cụm bố cục ${m.clusterPercent}% · hở nắp ${m.lidClearanceMm} mm`,recommendationScore:m.score+adjustment};});
+  const best=raw.filter(x=>x.layout).sort((a,b)=>b.recommendationScore-a.recommendationScore)[0];
+  boxFitCache={signature,fits:raw.map(x=>({...x,recommended:x===best}))};return boxFitCache.fits;
+}
+function currentAiLayoutSignature(box,lines){return JSON.stringify({version:"face-up-single-2",box:box.id,items:lines.map(x=>[x.item.id,x.qty]),materials:state.builder.materials,seed:state.builder.aiSeed||1});}
 function prepareAiLayouts(box,lines){
-  const signature=JSON.stringify({version:"face-up-single-1",box:box.id,items:lines.map(x=>[x.item.id,x.qty]),materials:state.builder.materials,seed:state.builder.aiSeed||1});
+  const signature=currentAiLayoutSignature(box,lines);
   if(state.builder.aiLayoutSignature===signature&&state.builder.aiLayouts?.length)return state.builder.aiLayouts;
-  const order=["premium","balanced","safe","visual","compact"],layout=order.map((id,index)=>buildAiLayout(id,index,box,lines)).find(Boolean),layouts=layout?[layout]:[];
-  state.builder.aiLayouts=layouts;state.builder.aiLayoutSignature=signature;state.builder.aiSessionId=state.builder.aiSessionId||crypto.randomUUID();state.builder.aiPrompt={version:"gift-pack-face-up-single-v1",system:state.admin.ai?.packingPrompt||AI_PACKING_SYSTEM_PROMPT,input:aiPromptInput(box,lines)};
+  const layout=findBestLayoutForBox(box,lines,3),layouts=layout?[layout]:[];
+  state.builder.aiLayouts=layouts;state.builder.aiLayoutSignature=signature;state.builder.aiSessionId=state.builder.aiSessionId||crypto.randomUUID();state.builder.aiPrompt={version:"gift-pack-face-up-single-v2",system:state.admin.ai?.packingPrompt||AI_PACKING_SYSTEM_PROMPT,input:aiPromptInput(box,lines,layout)};
   state.builder.aiLayoutId=layouts.some(x=>x.id===state.builder.aiLayoutId)?state.builder.aiLayoutId:(layouts[0]?.id||null);save();return layouts;
 }
 function parseAiJson(value){
@@ -655,9 +703,11 @@ function apiLayoutFromResult(raw,index,box,lines){
   for(const placement of placements){
     const candidates=cfg.instances.filter(x=>x.productId===placement.productId),quantityIndex=Number(placement.quantityIndex||0),instance=candidates[quantityIndex];
     if(!instance||used.has(instance.instanceId))continue;
-    const rotation=Math.abs(Math.round(Number(placement.rotationY||0)/90))%2?90:0;
-    Object.assign(instance,{x:Number(placement.x),z:Number(placement.z),rotX:0,rotY:rotation,rotZ:0,inBox:true,labelFacing:"up"});
-    const d=aiPlacedDimensions(instance),requestedY=Number(placement.y);instance.y=Number.isFinite(requestedY)?requestedY:floor+d.height/2;
+    const x=Number(placement.xMm??placement.x),z=Number(placement.zMm??placement.z),rotationRaw=Number(placement.rotationYDeg??placement.rotationY??0);
+    if(!Number.isFinite(x)||!Number.isFinite(z)||!Number.isFinite(rotationRaw))return null;
+    const rotation=Math.abs(Math.round(rotationRaw/90))%2?90:0;
+    Object.assign(instance,{x,z,rotX:0,rotY:rotation,rotZ:0,inBox:true,labelFacing:"up"});
+    const d=aiPlacedDimensions(instance),requestedY=Number(placement.yMm??placement.y);instance.y=Number.isFinite(requestedY)?requestedY:floor+d.height/2;
     instance.profile.primaryFace="top";used.add(instance.instanceId);
   }
   if(used.size!==cfg.instances.length)return null;
@@ -705,11 +755,13 @@ function resizeImageToBlob(imageDataUrl, maxSide = 512){
   });
 }
 
-function buildTextModelInput(box, lines){
+function buildTextModelInput(box, lines, baselineLayout){
   const chosenMaterials = selectedBuilderMaterials();
   const card = state.admin.cards?.find(c => c.id === state.builder.card);
   const ribbon = state.admin.ribbons?.find(r => r.id === state.builder.ribbon);
+  const fit=analyzeBoxFits(lines).find(x=>x.box.id===box.id);
   return {
+    workflowContract:{stage:"layout-refinement-after-physical-box-selection",selectedBoxLocked:true,cameraForFinalImage:"strict orthographic top-down 90 degrees",instruction:"Keep the validated baseline if a change is not measurably better."},
     box: {
       id: box.id,
       name: box.name,
@@ -748,7 +800,9 @@ function buildTextModelInput(box, lines){
     },
     ribbon: {
       name: ribbon?.name || "None"
-    }
+    },
+    selectedBoxFit:fit?{status:fit.status,label:fit.label,...fit.layout?.metrics}:null,
+    baselineLayout:layoutBlueprint(baselineLayout,box)
   };
 }
 
@@ -813,6 +867,8 @@ function validateAndConvertTextModelLayout(rawJson, box, lines){
     const x = Number(pl.xMm ?? pl.x ?? 0);
     const z = Number(pl.zMm ?? pl.z ?? 0);
     const rawRot = Number(pl.rotationYDeg ?? pl.rotationY ?? 0);
+    if(!Number.isFinite(x)||!Number.isFinite(z)||!Number.isFinite(rawRot))return {valid:false,errors:[`Tọa độ của ${pl.productId} phải là số hữu hạn theo millimet.`]};
+    if(Math.abs(rawRot-Math.round(rawRot/90)*90)>.5)return {valid:false,errors:[`${pl.productId} chỉ được xoay đúng 0 hoặc 90 độ trên mặt đáy.`]};
     const rotY = Math.abs(Math.round(rawRot / 90)) % 2 ? 90 : 0;
 
     instance.x = x;
@@ -858,6 +914,7 @@ function validateAndConvertTextModelLayout(rawJson, box, lines){
     report,
     generatedAt: new Date().toISOString()
   };
+  validatedLayout.metrics=layoutQualityMetrics(validatedLayout,box);
 
   return { valid: true, layout: validatedLayout, cfg, report };
 }
@@ -915,74 +972,74 @@ function getSpatialZone(x, z, boxLength, boxWidth) {
 function buildFluxImagePrompt(validatedLayout, builderData, activeRefs) {
   const { box, lines, card, ribbon } = builderData;
   const materials = selectedBuilderMaterials();
-  
+  const totalUnits=lines.reduce((sum,line)=>sum+Number(line.qty||0),0),boxLength=Number(box.innerLength),boxWidth=Number(box.innerWidth);
+  const refIndex=new Map(activeRefs.map((line,index)=>[line.item.id,index]));
   const refMap = activeRefs.map((line, idx) => {
     const form = getProductFormFactor(line.item);
-    return `- Input image ${idx} represents productId=${line.item.id}, product name=${line.item.name}. Packaging form: ${form}. Model MUST preserve this exact packaged appearance and shape from the reference image.`;
+    return `- input_image_${idx} = productId "${line.item.id}" = "${line.item.name}". Packaging form: ${form}. Copy this packaged product's silhouette, front color blocks, label placement and recognizable identity; do not copy its original background.`;
   }).join("\n");
-  
+
   const productList = lines.map(line => {
     const p = line.item;
     const m = p.model3d || {};
     const form = getProductFormFactor(p);
-    return `- ${p.name} (productId=${p.id}): Quantity ${line.qty}, Packaging form: [${form}], dimensions ${Math.round(m.length || 100)} × ${Math.round(m.width || 70)} × ${Math.round(m.height || 45)} mm, weight ${Math.round(m.weight || 100)}g.`;
+    const reference=refIndex.has(p.id)?`input_image_${refIndex.get(p.id)}`:"text description only";
+    return `- productId=${p.id}; name="${p.name}"; EXACT quantity=${line.qty}; sealed form=[${form}]; real size=${Math.round(m.length || 100)}×${Math.round(m.width || 70)}×${Math.round(m.height || 45)} mm; visual source=${reference}.`;
   }).join("\n");
-  
+
   const placementList = validatedLayout.configuration.instances.map((inst, idx) => {
-    const rot = Number(inst.rotY || 0);
-    const rotDeg = Math.abs(rot) > 45 ? 90 : 0;
-    const p = lines.find(l => l.item.id === inst.productId)?.item;
-    const form = p ? getProductFormFactor(p) : "packaging box";
-    const zone = getSpatialZone(inst.x, inst.z, box.innerLength, box.innerWidth);
-    return `- Item ${idx + 1} (${inst.name}, productId=${inst.productId}): Placed in the [${zone}] (approx coordinates X=${Math.round(inst.x)}mm, Z=${Math.round(inst.z)}mm), orientation ${rotDeg} degrees, main front label facing UP towards camera. Packaging type: [${form}].`;
+    const d=aiPlacedDimensions(inst),siblings=validatedLayout.configuration.instances.filter(x=>x.productId===inst.productId),quantityIndex=siblings.indexOf(inst),left=(inst.x-d.length/2+boxLength/2)/boxLength*100,top=(boxWidth/2-(inst.z+d.width/2))/boxWidth*100,width=d.length/boxLength*100,height=d.width/boxWidth*100,rotDeg=Math.abs(Math.round(Number(inst.rotY||0)/90))%2?90:0;
+    return `- UNIT ${idx+1}/${totalUnits}: productId=${inst.productId}, quantityIndex=${quantityIndex}; rectangle inside inner box: LEFT=${left.toFixed(1)}%, TOP=${top.toFixed(1)}%, WIDTH=${width.toFixed(1)}%, HEIGHT=${height.toFixed(1)}%; center X=${Math.round(inst.x)}mm, Z=${Math.round(inst.z)}mm; rotate in image plane=${rotDeg}°; front/main label faces straight UP to camera.`;
   }).join("\n");
-  
+
   const materialsDesc = materials.length ? materials.map(m => `${m.name} (${m.kind}, ${m.thickness}mm)`).join(", ") : "Kraft shredded paper filler";
   const cardDesc = card?.name ? `${card.name}${state.builder.message ? ` with printed note: "${state.builder.message}"` : ""}` : "No card";
   const ribbonDesc = ribbon?.name ? `${ribbon.name} tied neatly as an accent` : "No ribbon";
   const basePrompt = state.admin.ai?.imagePrompt || DEFAULT_AI_IMAGE_PROMPT;
 
-  return `Create exactly one photorealistic premium e-commerce product photograph. Show an elegant open gift box viewed from a slightly elevated top-down angle. ALL ${lines.length} products must be arranged INSIDE the box on the filler material. NO product may be placed outside, beside, or around the box.
+  return `RENDER CONTRACT — obey literally.
+
+Create exactly ONE photorealistic premium e-commerce photograph of ONE open gift box. CAMERA IS STRICTLY ORTHOGRAPHIC TOP-DOWN 90 DEGREES: camera directly above the center, optical axis perpendicular to the box floor, zero tilt, zero oblique angle, zero three-quarter perspective. The four inner box edges are parallel to the four image edges. The open box is centered and fills about 86% of the frame; show a narrow neutral border around it. Keep the lid completely outside the frame.
 
 ${basePrompt}
 
-REFERENCE IMAGE MAPPING:
+REFERENCE IDENTITY MAP:
 ${refMap}
 
-Each reference image is the mandatory visual identity of that product. Preserve its exact retail packaging carton/pouch, color palette, front label and recognizable appearance.
+SOURCE OF TRUTH PRIORITY: (1) exact manifest and quantity, (2) validated rectangles and relative dimensions, (3) reference product identity, (4) packaging decoration. Never sacrifice rules 1–3 for a prettier picture.
 
-VALIDATED BOX:
-- Box name: ${box.name}
-- Inner dimensions: ${box.innerLength} × ${box.innerWidth} × ${box.innerHeight} millimeters.
-- Box color and finish: ${box.color || "Natural kraft"}, ${box.finish || "Matte cardboard"}
-- Lid: open and visible beside or behind the box.
+LOCKED BOX — DO NOT RESIZE OR SUBSTITUTE:
+- id=${box.id}; name="${box.name}"; inner size=${box.innerLength}×${box.innerWidth}×${box.innerHeight} mm; exact inner aspect ratio=${(boxLength/boxWidth).toFixed(4)}:1.
+- color=${box.color || "Natural kraft"}; finish=${box.finish || "Matte cardboard"}.
+- Interior rectangle in the final image must preserve that aspect ratio. Walls are visible only as a slim top rim because the view is 90° overhead.
 
-VALIDATED PRODUCTS (EXACTLY ${lines.length} PRODUCTS ONLY):
+EXACT PRODUCT MANIFEST — EXACTLY ${totalUnits} PHYSICAL PRODUCT UNITS, ${lines.length} PRODUCT TYPES:
 ${productList}
 
-MANDATORY SPATIAL PLACEMENT (ALL items INSIDE the open box):
+LOCKED SPATIAL BLUEPRINT — percentages are relative to the INNER BOX rectangle, not the whole canvas:
 ${placementList}
 
-PACKAGING:
-- Fillers: ${materialsDesc}
-- Card: ${cardDesc}
-- Ribbon: ${ribbonDesc}
+SELECTED PACKAGING MATERIALS:
+- filler/liner only: ${materialsDesc}. Put it only in unused gaps around the locked product rectangles; do not hide any product front.
+- card accessory: ${cardDesc}.
+- ribbon accessory: ${ribbonDesc}.
 
-CRITICAL RULES:
-1. ALL ITEMS INSIDE THE BOX: Every single product MUST be placed INSIDE the open gift box, nestled among the filler material. ABSOLUTELY NO product may appear outside the box, beside the box, or on the table surface. The box interior is the ONLY valid location for all products!
-2. STRICT PRODUCT COUNT & IDENTITY: Render ONLY the ${lines.length} items listed above. DO NOT hallucinate, invent, or add extra bottles, canisters, cylinders, or gift items!
-3. RETAIL PACKAGING INTEGRITY: All products must appear inside their official SEALED retail packaging boxes or pouches as shown in the reference images. DO NOT render bare unpackaged food, raw chocolate squares, or open contents!
-4. PRESERVE PACKAGING SHAPES: Flat chocolate boxes must appear as flat rectangular boxes. Cylindrical jars (candle) must appear as jars. Tea pouches must appear as sealed stand-up pouches. Do not convert one shape into another!
-5. SPATIAL ARRANGEMENT INSIDE THE BOX: Place items in their designated zones within the box interior. All items share the same box interior space with the filler material between them.
-6. All front labels must face upwards towards the camera. Clean luxury e-commerce studio lighting, top-down perspective, no watermarks, no diagrams.`;
+FINAL COMPLIANCE CHECK BEFORE RENDERING:
+1. Count exactly ${totalUnits} product units from the manifest. No extras, duplicates, replacements, missing units, decorative food, bottles, jars or props.
+2. Every product is fully inside the inner box and occupies its specified LEFT/TOP/WIDTH/HEIGHT rectangle within ±3%. No product overlaps another rectangle or crosses a wall.
+3. Preserve real relative scale. A product twice as wide in millimeters must look twice as wide in the same axis; never shrink a product merely to make room.
+4. Use sealed retail packaging exactly as referenced. Do not unwrap food or turn flat cartons into jars/cylinders.
+5. Every main label is parallel to the image plane and faces camera. Do not stand, tilt, stack or cover products.
+6. Filler naturally occupies remaining negative space without altering the locked layout. Card and ribbon are accessories, not extra products.
+7. NO visible lid, hands, scissors, loose table props, captions, arrows, numbered markers, diagrams, collage, 3D wireframe, watermark or invented text.
+8. TOP-DOWN 90° ONLY. Reject any slanted camera, 45° view, isometric view, visible side faces, perspective convergence or diagonal box edges.
+
+Output the final photograph only.`;
 }
 
-function packingImagePrompt(layout,t){
-  const products=t.lines.map(line=>({productId:line.item.id,name:line.item.name,quantity:line.qty,dimensionsMm:{length:line.item.model3d?.length,width:line.item.model3d?.width,height:line.item.model3d?.height},mainFace:"front/up"}));
-  const placements=layout.configuration.instances.map((instance,index)=>({order:index+1,productId:instance.productId,name:instance.name,xMm:Math.round(instance.x),zMm:Math.round(instance.z),rotationOnFloorDeg:Number(instance.rotY||0),mainFace:"up"}));
-  const specification={box:{name:t.pack.name,color:t.pack.color,finish:t.pack.finish,innerDimensionsMm:[t.pack.innerLength,t.pack.innerWidth,t.pack.innerHeight],lid:"open and visible beside or behind the box"},fillers:selectedBuilderMaterials().map(x=>({name:x.name,kind:x.kind,color:x.color,thicknessMm:x.thickness})),card:{name:t.card?.name||"Không chọn",message:state.builder.message||""},ribbon:{name:t.ribbon?.name||"Không chọn"},products,validatedPlacement:placements,lidClearanceMm:Math.round(layout.report.lidClearanceMm)};
-  return `${state.admin.ai?.imagePrompt||DEFAULT_AI_IMAGE_PROMPT}\n\nTHÔNG SỐ THÀNH PHẨM ĐÃ CHỌN:\n${JSON.stringify(specification)}\n\nCác ảnh sản phẩm sẽ được đính kèm ngay sau lời nhắc này. Hãy coi từng ảnh là nguồn nhận diện bắt buộc, còn kiểu hộp và phụ kiện phải lấy đúng từ thông số trên. Không biến các món bên trong thành những gói quà bọc giấy giống nhau.`;
-}
+function stableLayoutSeed(layout,box){const input=JSON.stringify({box:box.id,items:layout.configuration.instances.map(x=>[x.productId,Math.round(x.x),Math.round(x.z),Math.round(x.rotY||0)]),materials:state.builder.materials});let hash=2166136261;for(let i=0;i<input.length;i++){hash^=input.charCodeAt(i);hash=Math.imul(hash,16777619);}return Math.abs(hash>>>0)||1;}
+
+function packingImagePrompt(layout,t,activeRefs=[]){return buildFluxImagePrompt(layout,{box:t.pack,lines:t.lines,card:t.card,ribbon:t.ribbon},activeRefs);}
 
 function generatedImageSource(payload){
   const parts=payload?.candidates?.[0]?.content?.parts||[],part=parts.find(x=>x?.inlineData?.data||x?.inline_data?.data),inline=part?.inlineData||part?.inline_data;
@@ -1009,8 +1066,8 @@ async function runGiftBoxAiPipeline(){
     step: "text_planning",
     stepNumber: 1,
     message: hasTextModelConfig
-      ? "Bước 1/4: Đang gửi dữ liệu kích thước thực tế sang Text Model để lập phương án xếp..."
-      : "Bước 1/4: Sử dụng thuật toán hình học tính toán phương án xếp theo kích thước thật...",
+      ? "Bước 1/4: Hộp và bố cục chuẩn đã khóa; đang gửi baseline mm sang Text Model để tinh chỉnh..."
+      : "Bước 1/4: Đã chọn hộp và tối ưu bố cục bằng thuật toán hình học kích thước thật...",
     repairAttempt: 0,
     maxRepairs: 2,
     errors: [],
@@ -1020,7 +1077,9 @@ async function runGiftBoxAiPipeline(){
 
   try {
     let validatedLayout = null;
-    const inputData = buildTextModelInput(t.pack, t.lines);
+    const baselineLayout=findBestLayoutForBox(t.pack,t.lines,3);
+    if(!baselineLayout)throw new Error("Các món không thể xếp vừa hộp này theo kích thước mm thật. Vui lòng chọn hộp khác.");
+    const inputData = buildTextModelInput(t.pack, t.lines, baselineLayout);
 
     if (hasTextModelConfig) {
       // Stage 1: Send to Text Model
@@ -1049,7 +1108,7 @@ async function runGiftBoxAiPipeline(){
       let rawJson = apiContent(payload);
       aiPipelineProgress.step = "validating";
       aiPipelineProgress.stepNumber = 2;
-      aiPipelineProgress.message = "Bước 2/4: Đang kiểm tra hình học (lòng hộp, không va chạm, khoảng đóng nắp, mặt hướng lên)...";
+      aiPipelineProgress.message = "Bước 2/4: Đang so Text Model với baseline và kiểm tra lòng hộp, va chạm, khoảng nắp, độ cân đối...";
       render();
 
       let validationResult = validateAndConvertTextModelLayout(rawJson, t.pack, t.lines);
@@ -1093,7 +1152,9 @@ async function runGiftBoxAiPipeline(){
       }
 
       if (validationResult.valid) {
-        validatedLayout = validationResult.layout;
+        const refined=validationResult.layout,baselineScore=Number(baselineLayout.metrics?.score||0),refinedScore=Number(refined.metrics?.score||0);
+        validatedLayout=refinedScore>=baselineScore-3?refined:baselineLayout;
+        if(validatedLayout===baselineLayout)aiPipelineProgress.message="Text Model hợp lệ nhưng kém cân đối hơn bản chuẩn; hệ thống giữ bố cục hình học đẹp hơn.";
       } else {
         if (validationResult.impossible) {
           throw new Error(validationResult.errors[0] || "AI xác nhận các món này không thể xếp vừa hộp đã chọn.");
@@ -1101,27 +1162,17 @@ async function runGiftBoxAiPipeline(){
         console.warn("Text Model could not produce valid geometry after 2 repairs. Falling back to local procedural packing.");
         aiPipelineProgress.message = "Bố cục Text Model chưa đạt sau 2 lần sửa; hệ thống tự động xếp an toàn theo thuật toán chuẩn...";
         render();
-        const fallback = buildAiLayout("balanced", 0, t.pack, t.lines) || buildAiLayout("safe", 1, t.pack, t.lines);
-        if (!fallback) throw new Error("Các món đã chọn vượt quá không gian hộp. Vui lòng chọn hộp lớn hơn.");
-        validatedLayout = fallback;
+        validatedLayout = baselineLayout;
       }
     } else {
       // Local procedural packing
-      const fallback = buildAiLayout("balanced", 0, t.pack, t.lines) || buildAiLayout("safe", 1, t.pack, t.lines);
-      if (!fallback) throw new Error("Các món đã chọn vượt quá không gian hộp. Vui lòng chọn hộp lớn hơn.");
-      validatedLayout = fallback;
+      validatedLayout = baselineLayout;
     }
 
     // Save verified layout
     state.builder.aiLayouts = [validatedLayout];
     state.builder.aiLayoutId = validatedLayout.id;
-    state.builder.aiLayoutSignature = JSON.stringify({
-      version: "pipeline-v1",
-      box: t.pack.id,
-      items: t.lines.map(x => [x.item.id, x.qty]),
-      materials: state.builder.materials,
-      seed: state.builder.aiSeed || 1
-    });
+    state.builder.aiLayoutSignature = currentAiLayoutSignature(t.pack,t.lines);
     state.builder.aiSource = {
       type: hasTextModelConfig ? "api" : "procedural",
       model: hasTextModelConfig ? ai.model : "procedural-engine",
@@ -1161,6 +1212,7 @@ async function runGiftBoxAiPipeline(){
         formData.append("prompt", fluxPrompt);
         formData.append("width", "1024");
         formData.append("height", "768");
+        formData.append("seed", String(stableLayoutSeed(validatedLayout,t.pack)));
 
         for (let i = 0; i < activeRefs.length; i++) {
           const line = activeRefs[i];
@@ -1188,12 +1240,14 @@ async function runGiftBoxAiPipeline(){
           model: ai.imageModel || "@cf/black-forest-labs/flux-2-klein-4b",
           provider: "Cloudflare Workers AI",
           createdAt: new Date().toISOString(),
-          referenceCount: activeRefs.length
+          referenceCount: activeRefs.length,
+          seed: stableLayoutSeed(validatedLayout,t.pack),
+          camera: "top-down-90"
         };
       } else if (isGeminiImageEndpoint(ai.imageEndpoint)) {
         // Gemini fallback
-        const prompt = packingImagePrompt(validatedLayout, t);
-        const parts = [{ text: prompt }], activeRefs = referenceLines.slice(0, 10);
+        const activeRefs = referenceLines.slice(0, 10),prompt = packingImagePrompt(validatedLayout, t, activeRefs);
+        const parts = [{ text: prompt }];
         for (const line of activeRefs) {
           const image = await referenceImageData(mainProductImage(line.item));
           parts.push(
@@ -1214,7 +1268,7 @@ async function runGiftBoxAiPipeline(){
         aiPackingImageMeta = { model: ai.imageModel, provider: "Gemini", createdAt: new Date().toISOString(), referenceCount: activeRefs.length };
       } else {
         // OpenAI format
-        const prompt = packingImagePrompt(validatedLayout, t);
+        const prompt = packingImagePrompt(validatedLayout, t, []);
         const imageResponse = await fetch(ai.imageEndpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${currentImageKey}` },
@@ -1272,21 +1326,21 @@ function aiPackingPage(){
   if(!layouts.length)return `<section class="section"><div class="narrow center"><span class="eyebrow">Chưa tìm được cách xếp hợp lệ</span><h1>Những món này chưa vừa hộp đã chọn.</h1><p class="muted">Hãy đổi sang hộp lớn hơn, giảm vật liệu lót hoặc bỏ bớt một món. Hệ thống không thu nhỏ sản phẩm để tạo ảnh đẹp giả.</p><button class="button" data-action="return-builder-step" data-step="2">Đổi hộp và chèn lót</button></div></section>`;
   const api=state.admin.ai||{},layoutApiReady=!!(api.enabled&&api.endpoint&&api.model&&aiSessionKey),imageApiReady=!!(api.enabled&&api.imageEndpoint&&api.imageModel&&(aiImageSessionKey||aiSessionKey)),apiUsed=state.builder.aiSource?.type==="api",busy=aiRequestBusy||aiPackingImageBusy;
   const references=t.lines.map(line=>{const image=mainProductImage(line.item);return `<div class="packing-reference-item">${image?`<img src="${esc(image)}" alt="Ảnh chính ${esc(line.item.name)}">`:`<span>${esc(line.item.name.slice(0,1))}</span>`}<div><strong>${line.qty} × ${esc(line.item.name)}</strong><small>${line.item.model3d.length} × ${line.item.model3d.width} × ${line.item.model3d.height} mm</small></div></div>`;}).join("");
-  const finalVisual=aiPackingImage?`<figure class="ai-final-photo"><img src="${aiPackingImage}" alt="Ảnh AI xem trước hộp quà thành phẩm"><figcaption><span>Ảnh thành phẩm do ${esc(aiPackingImageMeta?.model||api.imageModel)} tạo từ ${aiPackingImageMeta?.referenceCount||t.lines.length} ảnh sản phẩm</span><em>Bố cục đóng gói vật lý đã được kiểm tra hình học bên dưới.</em></figcaption></figure>`:`<div class="ai-final-placeholder"><div class="ai-final-placeholder-art"><span>Ảnh hộp quà thành phẩm</span><i></i><i></i><i></i></div><h2>${aiPackingImageBusy?"Cloudflare FLUX đang tạo ảnh thành phẩm chân thật…":"Tạo ảnh thực tế từ phương án xếp đã kiểm duyệt"}</h2><p>Website kiểm tra hình học và chống va chạm trước; sau đó Cloudflare FLUX dùng ảnh sản phẩm thật và toạ độ chính xác để dựng ảnh chụp sản phẩm.</p></div>`;
+  const finalVisual=aiPackingImage?`<figure class="ai-final-photo"><img src="${aiPackingImage}" alt="Ảnh AI trực diện từ trên xuống của hộp quà thành phẩm"><figcaption><span>Ảnh top-down 90° do ${esc(aiPackingImageMeta?.model||api.imageModel)} tạo từ ${aiPackingImageMeta?.referenceCount||t.lines.length} ảnh sản phẩm</span><em>Bố cục đóng gói vật lý đã được khóa theo millimet bên dưới.</em></figcaption></figure>`:`<div class="ai-final-placeholder"><div class="ai-final-placeholder-art"><span>Ảnh top-down 90°</span><i></i><i></i><i></i></div><h2>${aiPackingImageBusy?"Cloudflare FLUX đang dựng ảnh trực diện từ trên xuống…":"Tạo ảnh thực tế từ bố cục đã khóa"}</h2><p>Website chọn hộp, kiểm tra hình học và cân khoảng trống trước; FLUX nhận ảnh sản phẩm cùng phần trăm vị trí/kích thước chính xác.</p></div>`;
 
   const pipelineBannerHtml = `
   <div class="ai-pipeline-banner ${aiPipelineProgress.active || busy ? 'active' : ''} ${aiPackingImage ? 'has-image' : ''}">
     <div class="pipeline-header">
       <div class="pipeline-title">
         <span class="pipeline-badge">2 AI Pipeline</span>
-        <strong>Quy trình phối hợp 2 AI độc lập: ChatGPT lập bố cục + Cloudflare FLUX tạo ảnh</strong>
+        <strong>Hình học khóa hộp & bố cục → Text AI tinh chỉnh → FLUX tạo ảnh top-down</strong>
       </div>
       <div class="pipeline-steps-indicator">
-        <span class="p-step ${aiPipelineProgress.stepNumber >= 1 ? 'done' : ''} ${aiPipelineProgress.step === 'text_planning' ? 'current' : ''}">1. ChatGPT xếp hộp</span>
+        <span class="p-step ${aiPipelineProgress.stepNumber >= 1 ? 'done' : ''} ${aiPipelineProgress.step === 'text_planning' ? 'current' : ''}">1. Chọn hộp & bố cục chuẩn</span>
         <span class="p-arrow">→</span>
         <span class="p-step ${aiPipelineProgress.stepNumber >= 2 ? 'done' : ''} ${['validating', 'repairing'].includes(aiPipelineProgress.step) ? 'current' : ''}">2. Kiểm tra hình học & sửa</span>
         <span class="p-arrow">→</span>
-        <span class="p-step ${aiPipelineProgress.stepNumber >= 3 ? 'done' : ''} ${aiPipelineProgress.step === 'generating_image' ? 'current' : ''}">3. Cloudflare FLUX tạo ảnh</span>
+        <span class="p-step ${aiPipelineProgress.stepNumber >= 3 ? 'done' : ''} ${aiPipelineProgress.step === 'generating_image' ? 'current' : ''}">3. FLUX dựng top-down 90°</span>
         <span class="p-arrow">→</span>
         <span class="p-step ${aiPipelineProgress.step === 'completed' ? 'done' : ''}">4. Thành phẩm</span>
       </div>
@@ -1301,12 +1355,12 @@ function aiPackingPage(){
     </div>`}
   </div>`;
 
-  return `<section class="ai-packing-page"><div class="container"><div class="steps builder-five-steps packing-progress">${["Chọn món","Hộp & chèn lót","Thiệp & trang trí","Xem lại","Ảnh thành phẩm AI"].map((n,i)=>`<button class="step ${i===4?"active":""}" ${i===4?'disabled':`data-action="return-builder-step" data-step="${i+1}"`}>${i+1} · ${n}</button>`).join("")}</div>
+  return `<section class="ai-packing-page"><div class="container"><div class="steps builder-five-steps packing-progress">${["Chọn món","Hộp vừa đẹp","Thiệp & trang trí","Xem lại","Ảnh top-down AI"].map((n,i)=>`<button class="step ${i===4?"active":""}" ${i===4?'disabled':`data-action="return-builder-step" data-step="${i+1}"`}>${i+1} · ${n}</button>`).join("")}</div>
   <div class="ai-layout-hero">
     <div>
       <span class="eyebrow">Bước cuối · ảnh xem trước thành phẩm</span>
       <h1>Nhìn thấy hộp quà thực tế trước khi đặt.</h1>
-      <p>Kích thước thật được kiểm tra chặt chẽ; AI tạo ảnh chỉ nhận toạ độ và hướng xoay đã được xác nhận lọt lòng và còn khoảng hở đóng nắp.</p>
+      <p>Hộp được chọn bằng thử xếp thật; AI ảnh chỉ nhận bố cục đã khóa theo mm và dựng trực diện từ trên xuống 90°.</p>
     </div>
     <div class="ai-rule-card">
       <strong>Quy tắc hình học</strong>
@@ -1314,6 +1368,7 @@ function aiPackingPage(){
       <span>✓ Ảnh chính giữ nguyên bao bì</span>
       <span>✓ Giấy lót & khoảng đóng nắp</span>
       <span>✓ Mặt chính hướng lên</span>
+      <span>✓ Camera top-down 90°</span>
     </div>
   </div>
 
@@ -1343,6 +1398,7 @@ function aiPackingPage(){
       <div class="packing-reference-strip">${references}</div>
       <div class="packing-choice-summary">
         <span><b>Hộp</b>${esc(t.pack.name)} · ${t.pack.innerLength} × ${t.pack.innerWidth} × ${t.pack.innerHeight} mm</span>
+        <span><b>Độ vừa vặn</b>Sản phẩm chiếm ${selected.metrics?.fillPercent??"—"}% đáy · cụm bố cục ${selected.metrics?.clusterPercent??"—"}%</span>
         <span><b>Chèn lót</b>${esc(selectedBuilderMaterials().map(x=>x.name).join(" · ")||"Không chọn")}</span>
         <span><b>Hoàn thiện</b>${esc(t.card?.name||"Không thiệp")} · ${esc(t.ribbon?.name||"Không ruy băng")}</span>
       </div>
@@ -1765,8 +1821,9 @@ function handleAction(el){
   if(a==="generate-gift-recommendations")return requestAiGiftRecommendations();
   if(a==="generate-gift-images")return requestAiGiftImages();
   if(a==="continue-return") return navigate(safeReturnTo(el.dataset.return)); if(a==="gate-builder") return navigate(`/dang-nhap?returnTo=${encodeURIComponent('/tu-tao-hop')}`);
-  if(a==="builder-qty"){ const i=giftItems.find(x=>x.id===el.dataset.id), current=state.builder.items[i.id]||0, next=Math.max(0,Math.min(i.stock,current+Number(el.dataset.delta))); if(next===current&&Number(el.dataset.delta)>0) toast("Đã chạm số lượng tồn demo."); state.builder.items[i.id]=next;state.builder.aiLayouts=[];state.builder.aiLayoutId=null;state.builder.aiLayoutSignature="";clearPackingImage(); if(state.builder.packaging&&packaging.find(x=>x.id===state.builder.packaging).capacity<builderTotals().size){state.builder.packaging=null;toast("Các món mới không còn vừa hộp đã chọn. Vui lòng chọn lại hộp.");} save(); return render(); }
-  if(a==="builder-next"){ const t=builderTotals(); if(state.builder.step===1&&!t.lines.length) return toast("Hãy chọn ít nhất một món."); if(state.builder.step===2&&!state.builder.packaging) return toast("Hãy chọn một hộp đủ dung lượng."); if(state.builder.step===4) return navigate("/tu-tao-hop/goi-y-ai"); state.builder.step=Math.min(4,state.builder.step+1);save();return render(); }
+  if(a==="builder-qty"){ const i=giftItems.find(x=>x.id===el.dataset.id), current=state.builder.items[i.id]||0, next=Math.max(0,Math.min(i.stock,current+Number(el.dataset.delta))); if(next===current&&Number(el.dataset.delta)>0) toast("Đã chạm số lượng tồn demo."); state.builder.items[i.id]=next;state.builder.aiLayouts=[];state.builder.aiLayoutId=null;state.builder.aiLayoutSignature="";clearPackingImage(); if(state.builder.packaging){const chosen=analyzeBoxFits(builderTotals().lines).find(x=>x.box.id===state.builder.packaging);if(!chosen?.layout){state.builder.packaging=null;toast("Các món mới không xếp vừa hộp đã chọn theo kích thước mm. Vui lòng chọn lại hộp.");}} save(); return render(); }
+  if(a==="use-recommended-box"){const fit=analyzeBoxFits(builderTotals().lines).find(x=>x.box.id===el.dataset.id&&x.layout);if(!fit)return toast("Hộp này chưa có bố cục hợp lệ.");state.builder.packaging=fit.box.id;state.builder.aiLayouts=[];state.builder.aiLayoutId=null;state.builder.aiLayoutSignature="";clearPackingImage();save();toast("Đã dùng hộp vừa vặn do hệ thống thử xếp.");return render();}
+  if(a==="builder-next"){ const t=builderTotals(); if(state.builder.step===1&&!t.lines.length) return toast("Hãy chọn ít nhất một món."); if(state.builder.step===1){const recommendation=analyzeBoxFits(t.lines).find(x=>x.recommended);if(recommendation&&(!state.builder.packaging||!analyzeBoxFits(t.lines).find(x=>x.box.id===state.builder.packaging)?.layout))state.builder.packaging=recommendation.box.id;} if(state.builder.step===2&&!analyzeBoxFits(t.lines).find(x=>x.box.id===state.builder.packaging)?.layout) return toast("Hãy chọn một hộp đã vượt thử xếp kích thước thật."); if(state.builder.step===4) return navigate("/tu-tao-hop/goi-y-ai"); state.builder.step=Math.min(4,state.builder.step+1);save();return render(); }
   if(a==="builder-back"){state.builder.step=Math.max(1,state.builder.step-1);save();return render();} if(a==="builder-step"){state.builder.step=Number(el.dataset.step);save();return render();}
   if(a==="open-ai-layouts") return navigate("/tu-tao-hop/goi-y-ai");
   if(a==="return-builder-step"){state.builder.step=Math.min(4,Math.max(1,Number(el.dataset.step)||4));save();return navigate("/tu-tao-hop");}
@@ -1859,6 +1916,8 @@ function bindPageSpecific(){
     state.builder.materials=state.builder.materials||{};
     state.builder.materials[input.dataset.builderMaterial]=input.checked;
     state.builder.aiLayouts=[];state.builder.aiLayoutId=null;state.builder.aiLayoutSignature="";clearPackingImage();
+    const fits=analyzeBoxFits(builderTotals().lines),chosen=fits.find(x=>x.box.id===state.builder.packaging);
+    if(!chosen?.layout){const recommended=fits.find(x=>x.recommended);state.builder.packaging=recommended?.box.id||null;toast(recommended?"Vật liệu làm đổi không gian hữu dụng; đã cập nhật hộp đề xuất.":"Vật liệu mới khiến các hộp hiện có không còn xếp vừa.");}
     save();render();
   });
   const bind=(id,key,event="input")=>{const n=document.querySelector(id);if(n)n.addEventListener(event,()=>{state.builder[key]=n.type==="checkbox"?n.checked:n.value;if(["#b-card","#b-ribbon"].includes(id))clearPackingImage();save();if(["#b-card","#b-ribbon","#b-anonymous"].includes(id))render();});};
@@ -1942,6 +2001,7 @@ document.addEventListener("submit",e=>{
       model,
       temperature,
       textModelPrompt: textModelPrompt || TEXT_MODEL_PACKING_PROMPT,
+      textPromptVersion: 2,
       repairPrompt: repairPrompt || TEXT_MODEL_REPAIR_PROMPT,
       packingPrompt: textModelPrompt || TEXT_MODEL_PACKING_PROMPT,
       imageProvider,
@@ -1949,6 +2009,7 @@ document.addEventListener("submit",e=>{
       imageModel: imageModel || "@cf/black-forest-labs/flux-2-klein-4b",
       imageSize,
       imagePrompt: imagePrompt || DEFAULT_AI_IMAGE_PROMPT,
+      imagePromptVersion: 4,
       recommendationPrompt: recommendationPrompt || DEFAULT_AI_RECOMMENDATION_PROMPT
     };
 

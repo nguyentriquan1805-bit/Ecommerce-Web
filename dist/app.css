@@ -207,14 +207,27 @@ button { cursor: pointer; }
 .builder-subhead { margin: 28px 0 12px; font-family: var(--sans); font-size: .9rem; }
 .material-heading { margin-top: 38px; }
 .packaging-choice-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
+.box-recommendation { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin: 22px 0 28px; padding: 18px 20px; border: 1px solid #8fa487; border-left: 4px solid #4f7149; border-radius: 8px; background: #f1f6ef; }
+.box-recommendation > div { display: grid; gap: 4px; }
+.box-recommendation strong { color: #294e2b; font-size: 1.05rem; }
+.box-recommendation p { margin: 0; color: var(--muted); font-size: .76rem; }
 .package-option { position: relative; display: grid; grid-template-columns: auto 1fr; align-content: start; gap: 12px; min-height: 232px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--white); cursor: pointer; transition: border-color .18s, box-shadow .18s, transform .18s; }
 .package-option:hover { transform: translateY(-2px); border-color: #c6aa9d; box-shadow: 0 12px 30px rgba(68,43,35,.08); }
 .package-option.selected { border-color: var(--wine); box-shadow: inset 0 0 0 1px var(--wine), 0 12px 30px rgba(112,44,57,.09); }
+.package-option.recommended { background: linear-gradient(180deg,#f7fbf5 0,#fff 58%); border-color: #8fa487; }
 .package-option input { position: absolute; top: 17px; right: 17px; accent-color: var(--wine); }
 .package-option .asset-thumb { grid-column: 1 / -1; width: 100%; height: 94px; border-radius: 7px; }
 .package-option .asset-packaging i { scale: 1.22; }
 .package-option .price { align-self: end; justify-self: end; font-size: .78rem; }
 .package-copy { display: grid; gap: 4px; min-width: 0; }
+.package-fit-badges { display: flex; flex-wrap: wrap; gap: 5px; padding-right: 22px; }
+.package-fit-badges b, .package-fit-badges i { width: max-content; padding: 3px 7px; border-radius: 999px; font-size: .56rem; font-style: normal; line-height: 1; }
+.package-fit-badges b { background: #31532d; color: white; }
+.package-fit-badges i { background: #eee9e1; color: #625b53; }
+.package-fit-badges .fit-ideal { background: #dfeadd; color: #31532d; }
+.package-fit-badges .fit-tight { background: #fff0c5; color: #765710; }
+.package-fit-badges .fit-loose { background: #e8edf4; color: #40536c; }
+.package-fit-badges .fit-invalid { background: #f4dfe3; color: #8b293b; }
 .package-copy strong { padding-right: 12px; font-size: .82rem; line-height: 1.35; }
 .package-copy small { color: var(--muted); font-size: .64rem; line-height: 1.35; }
 .package-copy em { margin-top: 4px; color: #31532d; font-size: .62rem; font-style: normal; font-weight: 600; }
@@ -734,6 +747,8 @@ button { cursor: pointer; }
   .choice-list { grid-template-columns: 1fr; }
   .choice-preview-grid { grid-template-columns: 1fr; }
   .packaging-choice-grid, .material-choice-grid { grid-template-columns: 1fr; }
+  .box-recommendation { align-items: stretch; flex-direction: column; }
+  .box-recommendation .button { width: 100%; }
   .package-option { grid-template-columns: auto 1fr auto; min-height: 0; }
   .package-option .asset-thumb { grid-column: 1; grid-row: 1 / span 2; width: 92px; height: 82px; }
   .package-option .package-copy { grid-column: 2; }
@@ -748,7 +763,8 @@ button { cursor: pointer; }
   .ai-rule-card strong { grid-column: 1 / -1; }
   .ai-api-note { grid-template-columns: 40px 1fr; }
   .ai-api-note > span { width: 40px; height: 40px; }
-  .ai-api-note .button { grid-column: 1 / -1; width: 100%; }
+  .ai-api-note > .row { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); width: 100%; }
+  .ai-api-note .button { width: 100%; }
   .ai-layout-grid { grid-template-columns: 1fr; }
   .ai-gift-grid, .reference-grid { grid-template-columns: 1fr; }
   .ai-gift-card:last-child:nth-child(odd) { grid-column: auto; width: 100%; }
@@ -838,6 +854,7 @@ button { cursor: pointer; }
   .ai-layout-item { padding: 3px; }
   .ai-layout-item b { width: 16px; height: 16px; }
   .ai-layout-footer .row { display: grid; }
+  .ai-api-note > .row { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {
