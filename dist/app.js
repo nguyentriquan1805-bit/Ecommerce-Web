@@ -131,6 +131,85 @@ YÊU CẦU
 CHỈ TRẢ VỀ JSON HỢP LỆ, KHÔNG THÊM MARKDOWN:
 {"recommendations":[{"boxId":"box-01","reason":"Phù hợp vì..."},{"boxId":"box-02","reason":"Phù hợp vì..."},{"boxId":"box-03","reason":"Phù hợp vì..."},{"boxId":"box-04","reason":"Phù hợp vì..."},{"boxId":"box-05","reason":"Phù hợp vì..."}]}`;
 
+const GIFT_PRODUCT_MATCH_PROMPT=`You are the Product Matching Analyst for Gói Thương.
+
+Evaluate how well each eligible product matches the normalized recipient profile. Do not create combinations, choose boxes or create images. Use only productId values supplied in the input.
+
+Score each product from 0 to 100 using: recipient 25, occasion 25, interests 15, style 12, gift type 8, formality 5, age group 5 and color 5. Assign one role: anchor, complement, accent or flexible.
+
+Rules:
+- Never invent an ID, price, dimension, tag or stock value.
+- Q5 exclusions, age safety, active status and stock are absolute.
+- Expensive does not mean more suitable.
+- Return at most 24 products.
+- Output valid JSON only.
+
+Schema:
+{"matchedProducts":[{"productId":"tea-oolong","matchScore":90,"recommendedRole":"anchor","matchReasons":["..."]}]}`;
+
+const GIFT_COMBINATION_PROMPT=`You are the Gift Combination Composer for Gói Thương.
+
+Create semantically meaningful gift combinations from the supplied eligible products. Each combination must contain 2 to 4 distinct products; prefer 3 or 4. You are not allowed to decide whether products fit a physical box. The website validates dimensions after your response.
+
+Rules:
+- Use only supplied productId values and quantity 1.
+- Never add a fifth product, duplicate a product or invent data.
+- Include at least one anchor and complementary roles.
+- Avoid repetitive categories, conflicting uses and several strong-fragrance items together.
+- Respect recipient, occasion, interests, style, gift type and budget.
+- Create at most 30 meaningfully different drafts.
+- Output valid JSON only.
+
+Schema:
+{"draftCombinations":[{"draftId":"draft-1","productIds":["tea-oolong","cookies-butter","candle-ivory"],"concept":"...","compositionReason":"..."}]}`;
+
+const GIFT_RERANK_PROMPT=`You are the final Gift Candidate Reranker for Gói Thương.
+
+Every supplied candidate has already passed stock, exclusion, price and physical box-fit validation. Select exactly five existing candidateId values. Do not alter products, quantities, box, packaging, price or layout.
+
+Rules:
+- Prioritize recipient and occasion compatibility.
+- Prefer within-budget candidates; at most one upgrade may exceed the budget by no more than 15%.
+- The five choices must be meaningfully different, not merely renamed.
+- Write concise Vietnamese titles and reasons.
+- Output valid JSON only.
+
+Schema:
+{"recommendations":[{"rank":1,"candidateId":"candidate-id","title":"...","shortReason":"...","budgetLabel":"within_budget","upgradeAmount":0}]}`;
+
+const FINDER_RECIPIENT_OPTIONS=[
+  ["Bố","Gia đình"],["Mẹ","Gia đình"],["Ông bà","Gia đình"],["Anh/chị/em","Gia đình"],
+  ["Người yêu","Người yêu"],["Vợ/chồng","Người yêu"],["Bố mẹ người yêu","Người yêu"],
+  ["Bạn thân","Bạn bè"],["Bạn bè","Bạn bè"],["Sếp","Công việc"],["Đồng nghiệp","Công việc"],
+  ["Đối tác/khách hàng","Công việc"],["Thầy cô","Công việc"]
+];
+const FINDER_FORMALITY_RECIPIENTS=new Set(["Bố mẹ người yêu","Sếp","Đối tác/khách hàng","Đồng nghiệp","Thầy cô"]);
+const FINDER_OCCASIONS=["Sinh nhật","Kỷ niệm","Valentine / 8-3 / 20-10","Tết / Trung thu / Giáng sinh","Cảm ơn / Tri ân","Chúc mừng","Tân gia","Thăm bệnh","Ra mắt / Cưới hỏi","Không có dịp, tặng bất ngờ"];
+const FINDER_BUDGETS=["Dưới 300K","300–500K","500K–1 triệu","1–2 triệu","Trên 2 triệu"];
+const FINDER_AGES=["Dưới 12","13–22","23–35","36–55","Trên 55"];
+const FINDER_EXCLUSIONS=["Không rượu/bia","Hạn chế đường","Dị ứng hạt","Dị ứng sữa","Dị ứng gluten","Dị ứng hải sản","Ăn chay","Không mùi hương nồng","Không đồ quá riêng tư","Màu sắc không hợp","Không có gì"];
+const FINDER_INTERESTS=["Bánh kẹo, ẩm thực","Trà, cà phê","Làm đẹp, chăm sóc da","Nến, hương thơm","Thư giãn, sức khỏe","Nhà cửa, decor","Sách, văn phòng phẩm","Phụ kiện, thời trang","Rượu, đồ uống","Hoa, cây","Mình không rõ"];
+const FINDER_STYLES=["Tối giản","Thanh lịch","Sang trọng","Dễ thương","Ấm áp","Tự nhiên","Vintage","Hiện đại","Năng động","Lãng mạn"];
+const FINDER_COLORS=[
+  {id:"wine",name:"Đỏ rượu",hex:"#9f2f46"},{id:"blush",name:"Hồng phấn",hex:"#d7a4ab"},{id:"sage",name:"Xanh sage",hex:"#94a48a"},
+  {id:"cream",name:"Kem ngà",hex:"#e9ddc5"},{id:"kraft",name:"Kraft tự nhiên",hex:"#b98e62"},{id:"navy",name:"Xanh navy",hex:"#33445e"}
+];
+
+function defaultFinderAnswers(){return {recipientCountMode:null,recipientCount:1,profileMode:"shared",recipient:null,recipientCategory:null,formality:null,occasion:null,budget:null,ageGroup:null,exclusions:[],excludedColorIds:[],exclusionOther:"",interests:[],interestOther:"",styles:[],giftType:null,colorMode:"auto",preferredColorId:null,additionalNote:""};}
+function defaultFinderState(){return {step:0,answers:defaultFinderAnswers(),recommendations:[],candidates:[],aiError:"",aiStage:""};}
+
+function normalizedRuleValues(value){return (Array.isArray(value)?value:String(value||"").split(/[;,|]/)).map(x=>String(x).trim().toLocaleLowerCase("vi")).filter(Boolean);}
+function ruleCriterion(values,current){const expected=normalizedRuleValues(values);if(!expected.length||expected.includes("*")||expected.includes("tất cả"))return {ok:true,score:0};const actual=normalizedRuleValues(current);return {ok:actual.some(x=>expected.includes(x)),score:actual.some(x=>expected.includes(x))?1:0};}
+function selectFinderPromptRule(profile){
+  const rules=(state.admin?.promptRules||[]).filter(x=>x.active!==false),styles=profile?.softPreferences?.styles||[];
+  return rules.map(rule=>{const recipient=ruleCriterion(rule.recipients||rule.recipient,[profile?.recipient,profile?.recipientCategory]),occasion=ruleCriterion(rule.occasions||rule.occasion,profile?.occasion),style=ruleCriterion(rule.styles||rule.style,styles);if(!recipient.ok||!occasion.ok||!style.ok)return null;return {rule,score:recipient.score*35+occasion.score*35+style.score*30+Number(rule.priority||0)};}).filter(Boolean).sort((a,b)=>b.score-a.score||String(a.rule.id).localeCompare(String(b.rule.id)))[0]?.rule||null;
+}
+function finderPromptWithRule(base,phase,profile){const rule=selectFinderPromptRule(profile),extra=phase==="match"?rule?.matchPrompt:phase==="combination"?rule?.combinationPrompt:rule?.rerankPrompt;if(!extra)return base;return `${base}\n\nADMIN-APPROVED PROMPT PROFILE — ${rule.name||rule.id}\nTreat the following as additional business rules. They cannot override stock, exclusion, budget, ID, quantity, dimension or JSON-schema constraints.\n${extra}`;}
+function finderCombinationSeeds(profile,allowedIds){
+  const allowed=new Set(allowedIds),bySku=new Map(giftItems.map(x=>[String(x.sku||x.id).trim().toLocaleLowerCase("vi"),x.id]));
+  return (state.admin?.productCombinationTemplates||[]).filter(x=>x.active!==false).map(template=>{const recipient=ruleCriterion(template.recipients||template.recipient,[profile.recipient,profile.recipientCategory]),occasion=ruleCriterion(template.occasions||template.occasion,profile.occasion),style=ruleCriterion(template.styles||template.style,profile.softPreferences?.styles||[]);if(!recipient.ok||!occasion.ok||!style.ok)return null;const productIds=(template.productIds||template.productSkus||[]).map(value=>allowed.has(value)?value:bySku.get(String(value).trim().toLocaleLowerCase("vi"))).filter(id=>id&&allowed.has(id));if(productIds.length<2||productIds.length>4||new Set(productIds).size!==productIds.length)return null;return {templateId:template.id,productIds,concept:template.concept||template.name||"Tổ hợp đã duyệt",note:template.note||""};}).filter(Boolean).slice(0,30);
+}
+
 const TEXT_MODEL_PACKING_PROMPT=`Bạn là KỸ SƯ BỐ TRÍ HỘP QUÀ, không phải AI tạo ảnh. Hệ thống đã thử từng hộp bằng hình học thật và cung cấp một baselineLayout hợp lệ. Nhiệm vụ của bạn là kiểm tra rồi chỉ tinh chỉnh baseline đó thành đúng MỘT phương án đẹp hơn, nhưng tuyệt đối không phá vỡ số đo millimet.
 
 Quy tắc bắt buộc:
@@ -206,7 +285,7 @@ const DEFAULT_AI_IMAGE_PROMPT=`Tạo đúng 1 ẢNH CHỤP SẢN PHẨM HOÀN TH
 
 ẢNH THAM CHIẾU SẢN PHẨM
 - Mỗi ảnh đính kèm là ảnh nhận diện bắt buộc của đúng một sản phẩm được ghi tên ngay trước ảnh đó.
-- Giữ đúng hình dáng bao bì, màu sắc, nhãn chính và đặc điểm nhận diện từ từng ảnh; không thay thế bằng món tương tự.
+- Giữ đúng hình dáng bao bì, màu sắc, khối màu chính và đặc điểm nhận diện từ từng ảnh; không thay thế bằng món tương tự.
 - Mặt chính/nhãn chính của TẤT CẢ sản phẩm phải hướng lên phía người mở hộp và nhìn thấy rõ.
 
 RÀNG BUỘC BẮT BUỘC
@@ -216,7 +295,7 @@ RÀNG BUỘC BẮT BUỘC
 4. Giữ đúng TỈ LỆ KÍCH THƯỚC TƯƠNG ĐỐI giữa từng món và lòng hộp theo số đo millimet được cung cấp; món lớn phải trông lớn hơn món nhỏ đúng tương quan, không tự co giãn để làm ảnh đẹp.
 5. Cho thấy đây là một hộp quà thật đã được nhân viên chuẩn bị: vật liệu chèn chỉ lấp phần trống quanh món và không che mặt nhãn. Nắp hộp nằm ngoài khung hình để không che bố cục. Nền trung tính rất ít lộ ra quanh hộp.
 6. Không tạo sơ đồ, collage, wireframe, mô hình 3D thô, nhãn số, chú thích, mũi tên, chữ phủ trên ảnh, bàn tay, kéo hoặc vật thể trang trí không được chọn.
-7. Không bịa logo hoặc chữ mới. Chỉ giữ chữ/nhãn vốn có trong ảnh sản phẩm tham chiếu nếu có thể tái hiện chính xác.
+7. KHÔNG tạo chữ đọc được ở bất kỳ ngôn ngữ nào. Không bịa logo, ký tự, watermark hoặc chuỗi chữ vô nghĩa. Với vùng nhãn có chữ trong ảnh tham chiếu, thay bằng đúng icon đơn giản được khai báo cho sản phẩm; nếu không có icon thì để vùng nhãn sạch, không chữ.
 8. Hộp phải giữ đúng tỉ lệ dài:rộng theo kích thước lòng hộp. Vị trí và diện tích chiếm chỗ của từng món phải theo phần trăm tọa độ được cung cấp; không tự dồn lại hoặc tản ra.
 9. Camera bắt buộc top-down 90° trực diện. Cấm camera xiên, góc 45°, isometric, nhìn thấy mặt ngoài thành hộp quá nhiều hoặc đường hội tụ phối cảnh.
 
@@ -228,7 +307,7 @@ const DEFAULT_STATE = {
   drafts: [],
   occasions: [],
   orders: [],
-  finder: {step:1, recipient:null, occasion:null, budget:null, recommendations:[], aiError:""},
+  finder: defaultFinderState(),
   builder: {step:1, items:{}, budget:600000, packaging:null, materials:{"liner-paper":true,"fiber":true}, card:"simple", ribbon:"wine", recipient:"", sender:"", anonymous:false, message:"", draftName:"Hộp quà của mình", layout3d:null, aiLayouts:[], aiLayoutId:null, aiSessionId:null, aiSeed:1},
   personalize: {card:"simple", ribbon:"wine", recipient:"", sender:"", anonymous:false, message:""},
   accountTab: "overview",
@@ -241,8 +320,18 @@ function loadState(){
   catch { return structuredClone(DEFAULT_STATE); }
 }
 let state = loadState();
+if(!state.finder?.answers){
+  const legacy=state.finder||{},fresh=defaultFinderState();
+  fresh.answers.recipient=legacy.recipient||null;
+  fresh.answers.occasion=legacy.occasion||null;
+  fresh.answers.budget=legacy.budget||null;
+  state.finder=fresh;
+}else{
+  state.finder={...defaultFinderState(),...state.finder,answers:{...defaultFinderAnswers(),...state.finder.answers}};
+}
 let aiSessionKey="", aiImageSessionKey="", aiRequestBusy=false, aiFinderBusy=false, aiFinderImages={}, aiPackingImage="", aiPackingImageBusy=false, aiPackingImageMeta=null;
 let aiPipelineProgress = { active: false, step: "idle", stepNumber: 0, message: "", repairAttempt: 0, maxRepairs: 2, errors: [], source: "" };
+let bulkImportDraft={promptRules:[],combinationTemplates:[],productRows:[],imageFiles:[],errors:[],fileNames:{},busy:false};
 function clearPackingImage(){aiPackingImage="";aiPackingImageMeta=null;}
 function save(){
   try { localStorage.setItem("goiThuongState", JSON.stringify(state)); return true; }
@@ -265,8 +354,8 @@ const ADMIN_ROLES = {
 };
 const ROLE_LABELS = {owner:"Chủ cửa hàng",product:"Nhân viên sản phẩm",orders:"Nhân viên đơn hàng",customer:"Khách hàng"};
 const ADMIN_ACCESS = {
-  owner:["overview","products","inventory","options","library","orders","delivery","settings"],
-  product:["overview","products","inventory","options","library"],
+  owner:["overview","products","bulk","inventory","options","library","orders","delivery","settings"],
+  product:["overview","products","bulk","inventory","options","library"],
   orders:["overview","orders","delivery"],
 };
 function isSeller(){ return ["owner","product","orders"].includes(state.user?.role); }
@@ -294,6 +383,8 @@ function ensureAdminState(){
   }
   if(!state.admin.uploads) state.admin.uploads={};
   if(!state.admin.modelPhotos) state.admin.modelPhotos={};
+  if(!Array.isArray(state.admin.promptRules)) state.admin.promptRules=[];
+  if(!Array.isArray(state.admin.productCombinationTemplates)) state.admin.productCombinationTemplates=[];
   if(!state.admin.audit) state.admin.audit=[];
   if(!state.admin.inventoryLog) state.admin.inventoryLog=[];
   if(!state.admin.delivery?.slots?.length) state.admin.delivery={zone:"TP.HCM",fee:45000,capacity:12,slots:[{id:"morning",label:"9–12h",active:true,full:false},{id:"afternoon",label:"14–17h",active:true,full:true},{id:"evening",label:"18–21h",active:true,full:false}],holidays:""};
@@ -302,6 +393,9 @@ function ensureAdminState(){
     enabled:true,endpoint:"",model:"",imageProvider:"cloudflare",imageEndpoint:"https://goithuong-ai-image.nguyentriquan1805.workers.dev/",imageModel:"@cf/black-forest-labs/flux-2-klein-4b",imageSize:"1024x768",textPromptVersion:2,imagePromptVersion:4,
     temperature:0.15,
     recommendationPrompt:DEFAULT_AI_RECOMMENDATION_PROMPT,
+    productMatchPrompt:GIFT_PRODUCT_MATCH_PROMPT,
+    combinationPrompt:GIFT_COMBINATION_PROMPT,
+    rerankPrompt:GIFT_RERANK_PROMPT,
     textModelPrompt:TEXT_MODEL_PACKING_PROMPT,
     repairPrompt:TEXT_MODEL_REPAIR_PROMPT,
     packingPrompt:TEXT_MODEL_PACKING_PROMPT,
@@ -316,8 +410,11 @@ function ensureAdminState(){
   if(state.admin.ai.temperature===undefined) state.admin.ai.temperature=0.15;
   state.admin.ai.enabled=true;
   if(!state.admin.ai.recommendationPrompt)state.admin.ai.recommendationPrompt=DEFAULT_AI_RECOMMENDATION_PROMPT;
+  if(!state.admin.ai.productMatchPrompt)state.admin.ai.productMatchPrompt=GIFT_PRODUCT_MATCH_PROMPT;
+  if(!state.admin.ai.combinationPrompt)state.admin.ai.combinationPrompt=GIFT_COMBINATION_PROMPT;
+  if(!state.admin.ai.rerankPrompt)state.admin.ai.rerankPrompt=GIFT_RERANK_PROMPT;
   if(!state.admin.ai.packingPrompt||/đúng 5 phương án|five layouts|năm phương án/i.test(state.admin.ai.packingPrompt))state.admin.ai.packingPrompt=TEXT_MODEL_PACKING_PROMPT;
-  if(!state.admin.ai.imagePrompt||Number(savedAi.imagePromptVersion||0)<4){state.admin.ai.imagePrompt=DEFAULT_AI_IMAGE_PROMPT;state.admin.ai.imagePromptVersion=4;}
+  if(!state.admin.ai.imagePrompt||Number(savedAi.imagePromptVersion||0)<5){state.admin.ai.imagePrompt=DEFAULT_AI_IMAGE_PROMPT;state.admin.ai.imagePromptVersion=5;}
   if(!Array.isArray(state.admin.aiReferences))state.admin.aiReferences=[];
   state.finder={...structuredClone(DEFAULT_STATE.finder),...(state.finder||{})};
   if(state.user&&!state.user.role) state.user.role=ADMIN_ROLES[state.user.email]?.role||"customer";
@@ -470,68 +567,133 @@ function personalizer(b){
   return `<div class="personalizer"><h2 style="font-size:1.55rem">Cá nhân hóa</h2><p class="notice">Bạn đang chỉnh hộp <strong>${b.name}</strong>. Mọi phụ phí được cộng ngay vào tổng.</p><div class="form-grid"><div class="field"><label for="p-card">Mẫu thiệp</label><select id="p-card">${cards.map(x=>`<option value="${x.id}" ${p.card===x.id?"selected":""}>${x.name} ${x.price?"+ "+money(x.price):"· đã gồm"}</option>`).join("")}</select></div><div class="field"><label for="p-ribbon">Trang trí</label><select id="p-ribbon">${ribbons.map(x=>`<option value="${x.id}" ${p.ribbon===x.id?"selected":""}>${x.name} ${x.price?"+ "+money(x.price):"· đã gồm"}</option>`).join("")}</select></div></div><div class="field"><label for="p-recipient">Tên người nhận trên thiệp</label><input id="p-recipient" maxlength="40" value="${esc(p.recipient)}"></div><div class="field"><label for="p-message">Lời chúc <span class="muted">(<span id="p-count">${p.message.length}</span>/250)</span></label><textarea id="p-message" maxlength="250" placeholder="Mong những ngày tới đều dịu dàng với bạn.">${esc(p.message)}</textarea></div><label class="checkline"><input id="p-anonymous" type="checkbox" ${p.anonymous?"checked":""}> Không ghi tên người gửi trên thiệp</label><div class="card-preview" id="card-preview">${p.message?esc(p.message):"Lời chúc của bạn sẽ hiện ở đây."}</div><p class="fine-print">Bản xem trước chỉ mô phỏng bố cục chữ, không phải bản in chính xác.</p><button class="button" data-action="add-custom" data-id="${b.id}">Thêm hộp đã cá nhân hóa</button></div>`;
 }
 
-function finderBudgetRange(value){return ({"Dưới 300K":[0,299999],"300–500K":[300000,500000],"500–800K":[500001,800000],"Trên 800K":[800001,Infinity]})[value]||[0,Infinity];}
-function localGiftRecommendations(){
-  const f=state.finder,[min,max]=finderBudgetRange(f.budget),mid=Number.isFinite(max)?(min+max)/2:900000;
-  return boxes.filter(box=>box.stock>0).map(box=>{
-    const recipient=box.recipients.includes(f.recipient),occasion=box.occasions.includes(f.occasion),inBudget=box.price>=min&&box.price<=max;
-    const score=(recipient?45:0)+(occasion?55:0)+(inBudget?35:Math.max(0,18-Math.abs(box.price-mid)/25000))+Math.min(8,box.stock);
-    const reason=recipient&&occasion&&inBudget?`Đúng dịp ${f.occasion.toLowerCase()}, hợp với ${f.recipient.toLowerCase()} và nằm trong ngân sách.`:occasion&&inBudget?`Đúng dịp và ngân sách; phong cách ${box.style.toLowerCase()} tạo thêm một lựa chọn khác biệt.`:recipient&&inBudget?`Hợp người nhận và ngân sách; thành phần mang phong cách ${box.style.toLowerCase()}.`:`Một phương án ${box.style.toLowerCase()} gần nhất với các tiêu chí đã chọn.`;
-    return {box,score,reason,source:"local"};
-  }).sort((a,b)=>b.score-a.score||a.box.price-b.box.price).slice(0,5);
+function finderBudgetRange(value){return ({"Dưới 300K":[0,300000],"300–500K":[300000,500000],"500K–1 triệu":[500000,1000000],"1–2 triệu":[1000000,2000000],"Trên 2 triệu":[2000000,Infinity]})[value]||[0,Infinity];}
+function finderQuestionSteps(){
+  const a=state.finder.answers,steps=[{id:"people",label:"Số người"},{id:"recipient",label:"Người nhận"}];
+  if(FINDER_FORMALITY_RECIPIENTS.has(a.recipient))steps.push({id:"formality",label:"Thân thiết"});
+  return [...steps,{id:"occasion",label:"Dịp"},{id:"budget",label:"Ngân sách"},{id:"age",label:"Độ tuổi"},{id:"exclude",label:"Cần tránh"},{id:"interest",label:"Sở thích"},{id:"style",label:"Phong cách"},{id:"giftType",label:"Loại quà"},{id:"color",label:"Màu sắc"},{id:"note",label:"Ghi chú"}];
+}
+function finderProfile(){
+  const a=state.finder.answers,[budgetMin,budgetMax]=finderBudgetRange(a.budget),recipientCategory=FINDER_RECIPIENT_OPTIONS.find(x=>x[0]===a.recipient)?.[1]||"";
+  return {recipientCountMode:a.recipientCountMode,recipientCount:Number(a.recipientCount||1),profileMode:a.profileMode,recipient:a.recipient,recipientCategory,formality:a.formality,occasion:a.occasion,budget:{tier:a.budget,min:budgetMin,max:budgetMax,maximumUpgradePrice:Number.isFinite(budgetMax)?Math.round(budgetMax*1.15):Infinity},ageGroup:a.ageGroup,hardConstraints:{exclusions:a.exclusions||[],excludedColorIds:a.excludedColorIds||[],other:a.exclusionOther||""},softPreferences:{interests:a.interests||[],styles:a.styles||[],giftType:a.giftType,colorMode:a.colorMode,preferredColorId:a.preferredColorId},additionalNote:String(a.additionalNote||"").slice(0,500)};
+}
+function finderStepValid(id){
+  const a=state.finder.answers;
+  return id==="people"?!!a.recipientCountMode:id==="recipient"?!!a.recipient:id==="formality"?!!a.formality:id==="occasion"?!!a.occasion:id==="budget"?!!a.budget:id==="exclude"?!!a.exclusions?.length:true;
+}
+function finderChoice(value,key,selected,extra="",label=value){return `<button class="choice ${selected?"selected":""} ${extra}" data-action="finder-set" data-key="${key}" data-value="${esc(value)}">${esc(label)}</button>`;}
+function finderToggle(value,key,selected,extra=""){return `<button class="choice ${selected?"selected":""} ${extra}" data-action="finder-toggle" data-key="${key}" data-value="${esc(value)}">${esc(value)}</button>`;}
+function finderQuestionBody(id){
+  const a=state.finder.answers;
+  if(id==="people")return `<h2>Bạn tặng cho mấy người?</h2><div class="choice-list">${[["single","1 người"],["small_group","2–5 người"],["large_group","Hơn 5 người"]].map(([v,l])=>finderChoice(v,"recipientCountMode",a.recipientCountMode===v,"",l)).join("")}</div>${a.recipientCountMode&&a.recipientCountMode!=="single"?`<div class="finder-inline-fields"><label class="field">Số người<input id="finder-recipient-count" type="number" min="2" max="50" value="${Number(a.recipientCount||2)}"></label><div class="field"><span>Dùng tiêu chí</span><div class="choice-list compact">${finderChoice("shared","profileMode",a.profileMode==="shared","","Dùng chung rồi chỉnh riêng")}${finderChoice("separate","profileMode",a.profileMode==="separate","","Trả lời riêng từng người")}</div></div></div><p class="fine-print">Bản demo lưu một hồ sơ chung; tên, địa chỉ và lịch giao vẫn chỉnh riêng ở checkout.</p>`:""}`;
+  if(id==="recipient")return `<h2>Bạn đang chọn quà cho ai?</h2><div class="recipient-choice-groups">${["Gia đình","Người yêu","Bạn bè","Công việc"].map(group=>`<div><strong>${group}</strong><div class="choice-list compact">${FINDER_RECIPIENT_OPTIONS.filter(x=>x[1]===group).map(([v])=>finderChoice(v,"recipient",a.recipient===v)).join("")}</div></div>`).join("")}</div>`;
+  if(id==="formality")return `<h2>Mức độ thân thiết?</h2><p class="muted">Câu này giúp hộp quà vừa đủ trang trọng cho ${esc(a.recipient)}.</p><div class="choice-list">${[["formal","Mới quen / Trang trọng"],["friendly","Quen biết, thân thiện"],["close","Rất thân"]].map(([v,l])=>finderChoice(v,"formality",a.formality===v,"",l)).join("")}</div>`;
+  if(id==="occasion")return `<h2>Dịp tặng quà là gì?</h2><div class="choice-list">${FINDER_OCCASIONS.map(v=>finderChoice(v,"occasion",a.occasion===v)).join("")}</div>`;
+  if(id==="budget")return `<h2>Ngân sách cho mỗi hộp?</h2><p class="muted">Bốn lựa chọn sẽ ưu tiên không vượt mức này; tối đa một gợi ý “Đáng nâng cấp” được vượt không quá 15%.</p><div class="choice-list">${FINDER_BUDGETS.map(v=>finderChoice(v,"budget",a.budget===v)).join("")}</div>`;
+  if(id==="age")return `<h2>Người nhận thuộc nhóm tuổi nào?</h2><div class="choice-list">${FINDER_AGES.map(v=>finderChoice(v,"ageGroup",a.ageGroup===v)).join("")}${finderChoice("","ageGroup",!a.ageGroup,"","Bỏ qua")}</div>`;
+  if(id==="exclude")return `<h2>Có điều gì cần tránh không?</h2><p class="muted">Đây là điều kiện cứng: hệ thống không được tự nới.</p><div class="choice-list">${FINDER_EXCLUSIONS.map(v=>finderToggle(v,"exclusions",a.exclusions.includes(v))).join("")}</div>${a.exclusions.includes("Màu sắc không hợp")?`<div class="finder-subquestion"><strong>Màu nào cần tránh?</strong><div class="color-choice-list">${FINDER_COLORS.map(c=>`<button class="color-choice ${a.excludedColorIds.includes(c.id)?"selected":""}" style="--swatch:${c.hex}" data-action="finder-toggle" data-key="excludedColorIds" data-value="${c.id}"><i></i>${c.name}</button>`).join("")}</div></div>`:""}<label class="field"><span>Điều khác cần tránh</span><input id="finder-exclusion-other" maxlength="160" value="${esc(a.exclusionOther)}" placeholder="Ví dụ: không dùng sản phẩm có quế"></label>`;
+  if(id==="interest")return `<h2>Người nhận thích gì?</h2><p class="muted">Chọn tối đa 3. Nếu chưa rõ, hệ thống sẽ dựa vào người nhận và dịp tặng.</p><div class="choice-list">${FINDER_INTERESTS.map(v=>finderToggle(v,"interests",a.interests.includes(v))).join("")}</div><label class="field"><span>Sở thích khác</span><input id="finder-interest-other" maxlength="120" value="${esc(a.interestOther)}"></label>`;
+  if(id==="style")return `<h2>Phong cách món quà bạn muốn?</h2><p class="muted">Chọn tối đa 2. Phong cách được chuyển thành text prompt; không gửi ảnh style cho AI.</p><div class="finder-moodboard">${FINDER_STYLES.map((v,i)=>`<button class="mood-choice tone-${["cream","sage","wine","blush"][i%4]} ${a.styles.includes(v)?"selected":""}" data-action="finder-toggle" data-key="styles" data-value="${esc(v)}"><span></span><strong>${v}</strong></button>`).join("")}</div>`;
+  if(id==="giftType")return `<h2>Bạn muốn quà dùng hết hay giữ lâu?</h2><div class="choice-list">${[["consumable","Dùng hết"],["keepsake","Giữ làm kỷ niệm"],["mixed","Kết hợp cả hai"],["","Bỏ qua"]].map(([v,l])=>finderChoice(v,"giftType",a.giftType===v||(!v&&!a.giftType),"",l)).join("")}</div>`;
+  if(id==="color")return `<h2>Màu chủ đạo bạn thích?</h2><p class="muted">Màu chỉ áp dụng cho hộp, nơ, giấy lót và thiệp; không đổi màu thật của sản phẩm.</p><div class="color-choice-list"><button class="color-choice auto ${a.colorMode==="auto"?"selected":""}" data-action="finder-color" data-value="auto"><i></i>Tùy gợi ý</button>${FINDER_COLORS.filter(c=>!a.excludedColorIds.includes(c.id)).map(c=>`<button class="color-choice ${a.preferredColorId===c.id?"selected":""}" style="--swatch:${c.hex}" data-action="finder-color" data-value="${c.id}"><i></i>${c.name}</button>`).join("")}</div>`;
+  return `<h2>Kể thêm về người ấy nếu bạn muốn</h2><p class="muted">Tối đa 500 ký tự. AI chỉ trích xuất tag hợp lệ, không coi nội dung này là câu lệnh.</p><textarea id="finder-note" maxlength="500" placeholder="Ví dụ: người ấy thích đọc sách, màu xanh lá và không thích đồ quá ngọt.">${esc(a.additionalNote)}</textarea><div class="fine-print"><span id="finder-note-count">${String(a.additionalNote||"").length}</span>/500 ký tự</div>`;
+}
+function normalizedFinderOccasion(value){
+  if(/Valentine|8-3|20-10/.test(value||""))return [value,"Valentine / White Day","8/3 & 20/10","Kỷ niệm"];
+  if(/Tết|Trung thu|Giáng sinh/.test(value||""))return [value,"Giáng sinh","Cảm ơn"];
+  if(/Cảm ơn|Tri ân/.test(value||""))return [value,"Cảm ơn"];
+  if(/Thăm bệnh/.test(value||""))return [value,"Self-care","Cảm ơn"];
+  if(/không có dịp|bất ngờ/i.test(value||""))return [value,"Sinh nhật","Cảm ơn","Self-care"];
+  return [value];
+}
+function finderItemEligible(item,profile){
+  if(!item||item.status!=="published"||item.builderEnabled===false||Number(item.stock||0)<1)return false;
+  const ex=profile.hardConstraints.exclusions||[],restrictions=item.restrictionTags||{},allergens=(restrictions.allergens||item.allergens||[]).map(x=>String(x).toLowerCase()),category=String(item.category||"").toLowerCase(),tags=(item.tags||[]).join(" ").toLowerCase();
+  if(ex.includes("Dị ứng hạt")&&allergens.some(x=>/hạt|hạnh nhân/.test(x)))return false;
+  if(ex.includes("Dị ứng sữa")&&allergens.some(x=>/sữa/.test(x)))return false;
+  if(ex.includes("Dị ứng gluten")&&allergens.some(x=>/gluten/.test(x)))return false;
+  if(ex.includes("Dị ứng hải sản")&&allergens.some(x=>/hải sản/.test(x)))return false;
+  if(ex.includes("Không rượu/bia")&&restrictions.containsAlcohol)return false;
+  if(ex.includes("Ăn chay")&&restrictions.vegetarian===false)return false;
+  if(ex.includes("Hạn chế đường")&&(["normal","high"].includes(restrictions.sugarLevel)||(/socola|đồ ăn/.test(category)&&!/không đường/.test(tags))))return false;
+  if(ex.includes("Không mùi hương nồng")&&(restrictions.fragranceIntensity==="strong"||(/nến/.test(category)&&restrictions.fragranceIntensity!=="none")))return false;
+  if(ex.includes("Không đồ quá riêng tư")&&restrictions.privateItem)return false;
+  const ageCeiling={"Dưới 12":11,"13–22":22,"23–35":35,"36–55":55,"Trên 55":120}[profile.ageGroup]??120;
+  if(Number(restrictions.minimumAge||0)>ageCeiling)return false;
+  if(profile.ageGroup==="Dưới 12"&&(restrictions.containsAlcohol||/cà phê/.test(category)))return false;
+  return true;
+}
+function finderItemScore(item,profile){
+  const matching=item.matchingTags||{},itemRecipients=matching.recipients?.length?matching.recipients:(item.recipients||[]),itemOccasions=matching.occasions?.length?matching.occasions:(item.occasions||[]),recipientAliases=profile.recipientCategory==="Gia đình"?[profile.recipient,"Gia đình","Mẹ"]:profile.recipientCategory==="Người yêu"?[profile.recipient,"Người yêu"]:profile.recipientCategory==="Bạn bè"?[profile.recipient,"Bạn bè","Bạn thân"]:[profile.recipient,"Công việc","Đồng nghiệp"],occasionAliases=normalizedFinderOccasion(profile.occasion),hay=[...(item.tags||[]),...(matching.interests||[]),...(matching.styles||[])].join(" ").toLowerCase(),cat=String(item.category||"").toLowerCase();
+  const recipient=itemRecipients.some(x=>recipientAliases.includes(x))?25:8,occasion=itemOccasions.some(x=>occasionAliases.includes(x))?25:7;
+  const interestMap={"Bánh kẹo, ẩm thực":/đồ ăn|socola|mật ong|mứt|bánh/,"Trà, cà phê":/trà|cà phê|đồ uống/,"Làm đẹp, chăm sóc da":/self-care|son/,"Nến, hương thơm":/nến/,"Thư giãn, sức khỏe":/self-care|trà|muối/,"Nhà cửa, decor":/đồ dùng|trang trí|nến/,"Sách, văn phòng phẩm":/văn phòng/,"Phụ kiện, thời trang":/self-care/,"Rượu, đồ uống":/đồ uống|cà phê|trà/,"Hoa, cây":/trang trí/};
+  const interests=profile.softPreferences.interests||[],interest=interests.includes("Mình không rõ")||!interests.length?8:Math.min(15,interests.reduce((n,key)=>n+(interestMap[key]?.test(cat+" "+hay)?8:0),0)),styles=(profile.softPreferences.styles||[]).map(x=>x.toLowerCase()),style=Math.min(12,styles.reduce((n,x)=>n+(hay.includes(x)||item.short?.toLowerCase().includes(x)?7:0),0))||5;
+  const declaredGiftType=matching.giftType||"",giftType=profile.softPreferences.giftType?(declaredGiftType===profile.softPreferences.giftType||declaredGiftType==="mixed"?8:profile.softPreferences.giftType==="keepsake"?/văn phòng|trang trí|đồ dùng/.test(cat)?8:1:/văn phòng|trang trí|đồ dùng/.test(cat)?2:8):6;
+  return Math.round(Math.min(100,recipient+occasion+interest+style+giftType+5+5+5));
+}
+function finderPackagingChoice(profile){
+  const styles=profile.softPreferences.styles||[],color=profile.softPreferences.preferredColorId;
+  return {cardId:styles.includes("Lãng mạn")?"blush":styles.includes("Tự nhiên")?"botanical":"simple",ribbonId:["blush","sage","wine"].includes(color)?color:styles.includes("Tự nhiên")?"sage":styles.includes("Dễ thương")?"blush":"wine",materialIds:["liner-paper","fiber"]};
+}
+function fastFinderLayout(box,lines){return buildAiLayout("balanced",0,box,lines)||buildAiLayout("compact",1,box,lines);}
+function fastFinderBoxFit(lines){
+  const itemArea=lines.reduce((sum,line)=>sum+Number(line.item.model3d?.length||100)*Number(line.item.model3d?.width||70)*Number(line.qty||1),0),floor=aiFloorHeight(),boxes=[...packaging].filter(box=>lines.every(line=>Number(line.item.model3d?.height||45)+floor<=Number(box.innerHeight)-Number(box.lidClearance||0))).sort((a,b)=>Math.abs(Number(a.innerLength)*Number(a.innerWidth)-itemArea/.48)-Math.abs(Number(b.innerLength)*Number(b.innerWidth)-itemArea/.48));let best=null;
+  for(const box of boxes){const layout=fastFinderLayout(box,lines);if(!layout)continue;const candidate={box,layout},fill=Number(layout.metrics?.fillPercent||0);if(!best||Number(layout.metrics?.score||0)>Number(best.layout.metrics?.score||0))best=candidate;if(fill>=28&&fill<=70&&Number(layout.metrics?.lidClearanceMm||0)>=8)return candidate;}
+  return best;
+}
+function buildFinderCandidate(productIds,profile){
+  const ids=[...new Set(productIds)].filter(id=>giftItems.some(x=>x.id===id));if(ids.length<2||ids.length>4)return null;
+  const items=ids.map(id=>giftItems.find(x=>x.id===id));if(items.some(x=>!finderItemEligible(x,profile)))return null;
+  const lines=items.map(item=>({item,qty:1})),fit=fastFinderBoxFit(lines);if(!fit)return null;
+  const finish=finderPackagingChoice(profile),card=cards.find(x=>x.id===finish.cardId)||cards[0],ribbon=ribbons.find(x=>x.id===finish.ribbonId)||ribbons[0],materials=(state.admin.materials3d||[]).filter(x=>finish.materialIds.includes(x.id)&&x.active!==false),itemTotal=items.reduce((n,x)=>n+Number(x.price||0),0),packagingTotal=Number(fit.box.price||0)+Number(card.price||0)+Number(ribbon.price||0)+materials.reduce((n,x)=>n+Number(x.price||0),0),total=itemTotal+packagingTotal,max=profile.budget.max,withinBudget=!Number.isFinite(max)||total<=max,upgrade=!withinBudget&&total<=max*1.15;
+  if(Number.isFinite(max)&&!withinBudget&&!upgrade)return null;
+  const profileMatchScore=Math.round(items.reduce((n,x)=>n+finderItemScore(x,profile),0)/items.length),technicalScore=Math.round((Number(fit.layout.metrics?.score||0)*.55)+(withinBudget?30:18)+Math.min(15,items.reduce((n,x)=>n+x.stock,0)/5)),finalScore=Math.round(profileMatchScore*.7+technicalScore*.3),categories=[...new Set(items.map(x=>x.category))];
+  return {candidateId:`candidate-${ids.join("-")}-${fit.box.id}`,productIds:ids,boxId:fit.box.id,boxName:fit.box.name,layout:fit.layout,cardId:card.id,ribbonId:ribbon.id,materialIds:materials.map(x=>x.id),itemTotal,packagingTotal,total,withinBudget,upgradeAmount:upgrade?total-max:0,profileMatchScore,technicalScore,finalScore,categories,dominantColorId:profile.softPreferences.preferredColorId||fit.box.id,reason:`${items.map(x=>x.name).join(" · ")} tạo thành một nhóm quà ${profile.occasion?.toLowerCase()||"phù hợp"}, đã thử vừa ${fit.box.name.toLowerCase()}.`,source:"local"};
+}
+let finderCandidateCache={signature:"",items:[]};
+function localGiftCandidates(){
+  const profile=finderProfile(),eligible=giftItems.filter(x=>finderItemEligible(x,profile)).map(item=>({item,score:finderItemScore(item,profile)})).sort((a,b)=>b.score-a.score).slice(0,12),signature=JSON.stringify({profile,stock:eligible.map(x=>[x.item.id,x.item.stock]),boxes:packaging.map(x=>x.id)});if(finderCandidateCache.signature===signature)return finderCandidateCache.items;
+  const raw=finderCombinationSeeds(profile,eligible.map(x=>x.item.id)).map(seed=>({ids:seed.productIds,semantic:150,approvedTemplate:true}));function walk(start,chosen,target){if(chosen.length===target){const approx=chosen.reduce((n,x)=>n+x.item.price,0)+69000,max=profile.budget.max;if(!Number.isFinite(max)||approx<=max*1.15)raw.push({ids:chosen.map(x=>x.item.id),semantic:chosen.reduce((n,x)=>n+x.score,0)/target+new Set(chosen.map(x=>x.item.category)).size*3});return;}for(let i=start;i<eligible.length;i++)walk(i+1,[...chosen,eligible[i]],target);}
+  [2,3,4].forEach(n=>walk(0,[],n));const validated=raw.sort((a,b)=>b.semantic-a.semantic).slice(0,16).map(x=>buildFinderCandidate(x.ids,profile)).filter(Boolean).sort((a,b)=>b.finalScore-a.finalScore||a.total-b.total),selected=[];
+  for(const candidate of validated){if(selected.length>=5)break;if(candidate.upgradeAmount&&selected.some(x=>x.upgradeAmount))continue;const overlap=selected.some(x=>{const shared=x.productIds.filter(id=>candidate.productIds.includes(id)).length;return shared/Math.max(x.productIds.length,candidate.productIds.length)>.75;});if(!overlap)selected.push(candidate);}
+  for(const candidate of validated){if(selected.length>=5)break;if(!selected.some(x=>x.candidateId===candidate.candidateId)&&(!candidate.upgradeAmount||!selected.some(x=>x.upgradeAmount)))selected.push(candidate);}
+  finderCandidateCache={signature,items:selected.slice(0,5)};return finderCandidateCache.items;
 }
 function finderRecommendations(){
-  const local=localGiftRecommendations(),byId=new Map(local.map(x=>[x.box.id,x])),fromAi=(state.finder.recommendations||[]).map(item=>{
-    const box=boxes.find(x=>x.id===item.boxId&&x.stock>0);return box?{box,reason:item.reason||byId.get(box.id)?.reason||"AI chọn theo hồ sơ người nhận.",source:"api"}:null;
-  }).filter(Boolean),used=new Set(fromAi.map(x=>x.box.id));
-  return [...fromAi,...local.filter(x=>!used.has(x.box.id))].slice(0,5);
+  const local=localGiftCandidates(),pool=[...(state.finder.candidates||[]),...local],byId=new Map(pool.map(x=>[x.candidateId,x])),used=new Set(),fromAi=(state.finder.recommendations||[]).map(rec=>{const candidate=byId.get(rec.candidateId);if(!candidate||used.has(candidate.candidateId))return null;used.add(candidate.candidateId);return {...candidate,title:rec.title,reason:rec.shortReason||candidate.reason,source:"api"};}).filter(Boolean),filled=local.filter(x=>!used.has(x.candidateId)).map(x=>({...x,title:null,source:"local"}));return [...fromAi,...filled].slice(0,5);
 }
-function referenceForRecommendation(box,index){
-  const refs=(state.admin.aiReferences||[]).filter(x=>x.active!==false&&x.data),occasion=state.finder.occasion;
-  return refs.find(x=>x.occasion===occasion&&(!x.style||box.style.toLowerCase().includes(x.style.toLowerCase())))||refs.find(x=>x.occasion===occasion)||refs[index%Math.max(1,refs.length)]||null;
+function useFinderCandidate(candidateId){
+  const candidate=finderRecommendations().find(x=>x.candidateId===candidateId)||[...(state.finder.candidates||[]),...localGiftCandidates()].find(x=>x.candidateId===candidateId);if(!candidate)return toast("Phương án này không còn hợp lệ. Hãy để hệ thống phối lại.");
+  state.builder.items=Object.fromEntries(candidate.productIds.slice(0,4).map(id=>[id,1]));state.builder.packaging=candidate.boxId;state.builder.materials=Object.fromEntries((candidate.materialIds||[]).map(id=>[id,true]));state.builder.card=candidate.cardId||"simple";state.builder.ribbon=candidate.ribbonId||"wine";state.builder.step=4;state.builder.aiSeed=1;state.builder.aiLayouts=candidate.layout?[candidate.layout]:[];state.builder.aiLayoutId=candidate.layout?.id||null;state.builder.aiLayoutSignature="";state.builder.finderProfile=structuredClone(finderProfile());state.builder.finderPromptRuleId=selectFinderPromptRule(state.builder.finderProfile)?.id||null;state.builder.finderCandidateId=candidate.candidateId;state.builder.draftName=candidate.title||"Hộp AI gợi ý";state.builder.aiError="";clearPackingImage();save();
+  const target="/tu-tao-hop/goi-y-ai";return state.user?navigate(target):navigate(`/dang-nhap?returnTo=${encodeURIComponent(target)}`);
 }
-function recommendationVisual(box,index){
-  const generated=aiFinderImages[box.id],own=box.images?.find(x=>x.cover)?.data||box.images?.[0]?.data,ref=referenceForRecommendation(box,index),image=generated||own||ref?.data;
-  if(image)return `<div class="ai-gift-visual has-image" style="background-image:url('${String(image).replace(/'/g,"%27")}')"><span>${generated?"Ảnh AI · 1 bố cục":own?"Ảnh hộp quà":"Mẫu tham khảo"}</span></div>`;
-  const pieces=(box.items||[]).slice(0,5).map((item,i)=>`<i style="--x:${12+(i%3)*29}%;--y:${14+Math.floor(i/3)*42}%;--r:${(i%2?4:-4)}deg">${esc(item.split(" ").slice(0,2).join(" "))}</i>`).join("");
-  return `<div class="ai-gift-visual generated-layout tone-${esc(box.tone||"cream")}"><b>Hộp nhìn từ trên</b>${pieces}<span>1 bố cục gợi ý</span></div>`;
+async function callFinderTextAi(systemPrompt,userPayload){
+  const ai=state.admin.ai||{},response=await fetch(ai.endpoint,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${aiSessionKey}`},body:JSON.stringify({model:ai.model,temperature:Number(ai.temperature||.15),response_format:{type:"json_object"},messages:[{role:"system",content:systemPrompt},{role:"user",content:JSON.stringify(userPayload)}]})}),payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload?.error?.message||`API trả mã ${response.status}`);return parseAiJson(apiContent(payload));
 }
 async function requestAiGiftRecommendations(){
-  const ai=state.admin.ai||{};if(aiFinderBusy)return;
-  if(!ai.enabled||!ai.endpoint||!ai.model||!aiSessionKey)return toast("Hãy cấu hình API và nhập API key tại Quản trị → Cài đặt.");
-  aiFinderBusy=true;state.finder.aiError="";render();
+  const ai=state.admin.ai||{};if(aiFinderBusy)return;if(!ai.enabled||!ai.endpoint||!ai.model||!aiSessionKey)return toast("Hãy cấu hình Text Model và nhập API key tại Quản trị → Cài đặt.");
+  aiFinderBusy=true;state.finder.aiError="";state.finder.aiStage="Đang match từng sản phẩm với questionnaire…";render();
   try{
-    const catalog=boxes.filter(x=>x.stock>0).map(x=>({boxId:x.id,name:x.name,price:x.price,stock:x.stock,recipients:x.recipients,occasions:x.occasions,style:x.style,items:x.items}));
-    const response=await fetch(ai.endpoint,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${aiSessionKey}`},body:JSON.stringify({model:ai.model,temperature:.25,response_format:{type:"json_object"},messages:[{role:"system",content:ai.recommendationPrompt||DEFAULT_AI_RECOMMENDATION_PROMPT},{role:"user",content:JSON.stringify({profile:{recipient:state.finder.recipient,occasion:state.finder.occasion,budget:state.finder.budget},catalog})}]})});
-    const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload?.error?.message||`API trả mã ${response.status}`);
-    const parsed=parseAiJson(apiContent(payload)),seen=new Set(),recommendations=(parsed.recommendations||[]).filter(x=>boxes.some(b=>b.id===x.boxId&&b.stock>0)&&!seen.has(x.boxId)&&seen.add(x.boxId)).slice(0,5);
-    if(!recommendations.length)throw new Error("AI chưa trả boxId hợp lệ từ danh mục.");
-    state.finder.recommendations=recommendations;save();toast(`AI đã chọn ${finderRecommendations().length} hộp quà khác nhau.`);
-  }catch(error){state.finder.aiError=String(error?.message||"Không gọi được API tư vấn.");save();toast(state.finder.aiError);}
+    const profile=finderProfile(),eligible=giftItems.filter(x=>finderItemEligible(x,profile)),compact=eligible.map(x=>({productId:x.id,name:x.name,category:x.category,price:x.price,stock:x.stock,lead:x.lead,tags:x.tags,occasions:x.occasions,recipients:x.recipients,allergens:x.allergens,dimensions:x.model3d}));
+    const selectedRule=selectFinderPromptRule(profile);state.finder.matchedPromptRuleId=selectedRule?.id||null;
+    const matched=await callFinderTextAi(finderPromptWithRule(ai.productMatchPrompt||GIFT_PRODUCT_MATCH_PROMPT,"match",profile),{recipientProfile:profile,selectedPromptProfile:selectedRule?{id:selectedRule.id,name:selectedRule.name}:null,eligibleProducts:compact}),allowed=new Set(eligible.map(x=>x.id)),matchedIds=(matched.matchedProducts||[]).map(x=>x.productId).filter(id=>allowed.has(id)).slice(0,24);if(matchedIds.length<2)throw new Error("AI chưa match đủ sản phẩm hợp lệ.");
+    state.finder.aiStage="Đang ghép tối đa 4 món thành nhiều tổ hợp…";render();
+    const approvedCombinationSeeds=finderCombinationSeeds(profile,matchedIds),composed=await callFinderTextAi(finderPromptWithRule(ai.combinationPrompt||GIFT_COMBINATION_PROMPT,"combination",profile),{recipientProfile:profile,selectedPromptProfile:selectedRule?{id:selectedRule.id,name:selectedRule.name}:null,matchedProducts:matched.matchedProducts,productDetails:compact.filter(x=>matchedIds.includes(x.productId)),approvedCombinationSeeds,compositionConfig:{minimumProducts:2,preferredProducts:4,maximumProducts:4,maximumDraftCombinations:30}}),validated=[];
+    for(const draft of composed.draftCombinations||[]){const ids=[...new Set(draft.productIds||[])];if(ids.length<2||ids.length>4||ids.some(id=>!allowed.has(id)))continue;const candidate=buildFinderCandidate(ids,profile);if(candidate&&!validated.some(x=>x.candidateId===candidate.candidateId))validated.push({...candidate,concept:draft.concept||"",reason:draft.compositionReason||candidate.reason,source:"api"});}
+    for(const fallback of localGiftCandidates())if(validated.length<20&&!validated.some(x=>x.candidateId===fallback.candidateId))validated.push(fallback);
+    if(validated.length<5)throw new Error("Chưa đủ 5 tổ hợp vượt kiểm tra kích thước và ngân sách.");
+    state.finder.aiStage="Đang lọc 5 tổ hợp khác biệt nhất…";render();
+    const reranked=await callFinderTextAi(finderPromptWithRule(ai.rerankPrompt||GIFT_RERANK_PROMPT,"rerank",profile),{recipientProfile:profile,selectedPromptProfile:selectedRule?{id:selectedRule.id,name:selectedRule.name}:null,validatedCandidates:validated.slice(0,20).map(x=>({candidateId:x.candidateId,productIds:x.productIds,productNames:x.productIds.map(id=>giftItems.find(p=>p.id===id)?.name),categories:x.categories,boxId:x.boxId,totalPrice:x.total,withinBudget:x.withinBudget,upgradeAmount:x.upgradeAmount,profileMatchScore:x.profileMatchScore,technicalScore:x.technicalScore,fitMetrics:x.layout?.metrics}))}),validIds=new Set(validated.map(x=>x.candidateId)),seen=new Set(),recommendations=(reranked.recommendations||[]).filter(x=>validIds.has(x.candidateId)&&!seen.has(x.candidateId)&&seen.add(x.candidateId)).slice(0,5);
+    if(recommendations.length<5)throw new Error("AI chưa trả đúng 5 candidateId hợp lệ.");state.finder.candidates=validated;state.finder.recommendations=recommendations;state.finder.aiStage="";save();toast("AI Gift Composer đã lọc 5 tổ hợp hợp lệ.");
+  }catch(error){state.finder.aiError=String(error?.message||"Không gọi được AI Gift Composer.");state.finder.aiStage="";save();toast(`${state.finder.aiError} Đang giữ 5 gợi ý cục bộ an toàn.`);}
   finally{aiFinderBusy=false;render();}
 }
-async function requestAiGiftImages(){
-  const ai=state.admin.ai||{},recommendations=finderRecommendations();if(aiFinderBusy)return;
-  if(!ai.enabled||!ai.imageEndpoint||!ai.imageModel||!aiSessionKey)return toast("Hãy nhập API tạo ảnh, model ảnh và API key tại Quản trị → Cài đặt.");
-  aiFinderBusy=true;state.finder.aiError="";render();
-  try{
-    const results=await Promise.all(recommendations.map(async ({box},index)=>{
-      const ref=referenceForRecommendation(box,index),prompt=`${ai.imagePrompt||DEFAULT_AI_IMAGE_PROMPT}\nHộp: ${box.name}. Thành phần: ${(box.items||[]).join(", ")}. Dịp: ${state.finder.occasion}. Người nhận: ${state.finder.recipient}. Phong cách: ${box.style}.${ref?` Tham khảo phong cách: ${ref.title}; ${ref.notes||""}.`:""}`;
-      const response=await fetch(ai.imageEndpoint,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${aiSessionKey}`},body:JSON.stringify({model:ai.imageModel,prompt,n:1,size:ai.imageSize||"1024x1024",response_format:"b64_json"})});
-      const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload?.error?.message||`API ảnh trả mã ${response.status}`);const item=payload?.data?.[0],src=item?.b64_json?`data:image/png;base64,${item.b64_json}`:item?.url;if(!src)throw new Error("API ảnh không trả dữ liệu ảnh.");return [box.id,src];
-    }));
-    aiFinderImages=Object.fromEntries(results);toast("AI đã tạo đúng 1 hình cho mỗi lựa chọn quà.");
-  }catch(error){state.finder.aiError=String(error?.message||"Không tạo được ảnh AI.");save();toast(state.finder.aiError);}
-  finally{aiFinderBusy=false;render();}
-}
+function finderProductStrip(candidate){return `<div class="finder-product-strip">${candidate.productIds.map(id=>{const item=giftItems.find(x=>x.id===id),image=mainProductImage(item);return `<div class="finder-product-thumb">${image?`<img src="${esc(image)}" alt="Ảnh mặt chính ${esc(item.name)}">`:`<span>${esc(item.name.slice(0,1))}</span>`}<strong>${esc(item.name)}</strong><small>${money(item.price)}</small></div>`;}).join("")}</div>`;}
 function finderPage(){
-  pageTitle("Tìm quà nhanh"); const f=state.finder;
-  const options=f.step===1?["Người yêu","Bạn thân","Chính mình"]:f.step===2?["Sinh nhật","Kỷ niệm","Làm hòa","Self-care","Valentine / White Day","Giáng sinh","8/3 & 20/10"]:["Dưới 300K","300–500K","500–800K","Trên 800K"];
-  const selected=f.step===1?f.recipient:f.step===2?f.occasion:f.budget;
-  const questions=["Bạn đang chọn quà cho ai?","Dịp này là dịp gì?","Bạn muốn dành khoảng bao nhiêu cho hộp quà?"];
-  if(f.step<=3) return `<section class="page-hero"><div class="narrow"><span class="eyebrow">AI Gift Finder</span><h1>Ba câu hỏi, năm lựa chọn có lý do.</h1><p>AI chỉ được chọn từ sản phẩm đang có. Mỗi lựa chọn sẽ có đúng một hình sắp xếp hoàn chỉnh.</p></div></section><section class="section"><div class="narrow finder-shell"><div class="steps">${[1,2,3].map((n,i)=>`<button class="step ${f.step===n?"active":""}" data-action="finder-step" data-step="${n}" ${n>f.step?"disabled":""}>${n} · ${["Người nhận","Dịp","Ngân sách"][i]}</button>`).join("")}<span></span></div><span class="eyebrow">Câu ${f.step} / 3</span><h2>${questions[f.step-1]}</h2><div class="choice-list">${options.map(v=>`<button class="choice ${selected===v?"selected":""}" data-action="finder-choice" data-value="${esc(v)}">${esc(v)}</button>`).join("")}</div><div class="row spaced" style="margin-top:28px"><button class="button ghost" data-action="finder-reset">Bắt đầu lại</button><button class="button" data-action="finder-next" ${selected?"":"disabled"}>${f.step===3?"Tạo 5 lựa chọn":"Tiếp tục"}</button></div></div></section>`;
-  const recommendations=finderRecommendations(),ai=state.admin.ai||{},chatReady=!!(ai.enabled&&ai.endpoint&&ai.model&&aiSessionKey),imageReady=!!(ai.enabled&&ai.imageEndpoint&&ai.imageModel&&aiSessionKey);
-  return `<section class="page-hero"><div class="container results-intro"><div><span class="eyebrow">5 lựa chọn cá nhân hóa</span><h1>Mỗi hộp là một món quà khác nhau.</h1><p>${esc(f.recipient)} · ${esc(f.occasion)} · ${esc(f.budget)}. Mỗi hộp chỉ có một hình sắp xếp để bạn dễ chọn.</p></div><button class="button secondary" data-action="finder-edit">Sửa câu trả lời</button></div></section><section class="section"><div class="container"><div class="finder-ai-toolbar"><div><strong>${recommendations.some(x=>x.source==="api")?"Đã chọn bằng API AI":"Đang dùng bộ gợi ý an toàn trong web"}</strong><p class="small muted">${(state.admin.aiReferences||[]).filter(x=>x.active!==false).length} ảnh tham khảo đang hoạt động.${f.aiError?` <b class="danger-text">${esc(f.aiError)}</b>`:""}</p></div><div class="row wrap"><button class="button secondary small-btn" data-action="generate-gift-recommendations" ${chatReady&&!aiFinderBusy?"":"disabled"}>${aiFinderBusy?"AI đang xử lý…":"AI chọn lại 5 hộp"}</button><button class="button small-btn" data-action="generate-gift-images" ${imageReady&&!aiFinderBusy?"":"disabled"}>Tạo 5 hình AI</button></div></div><div class="ai-gift-grid">${recommendations.map(({box,reason,source},index)=>`<article class="ai-gift-card">${recommendationVisual(box,index)}<div class="ai-gift-card-body"><div class="row spaced"><span class="eyebrow">Lựa chọn ${index+1}</span><span class="status ${source==="api"?"status-published":"status-draft"}">${source==="api"?"AI API":"Gợi ý demo"}</span></div><h2>${esc(box.name)}</h2><p>${esc(reason)}</p><ul>${(box.items||[]).slice(0,5).map(item=>`<li>${esc(item)}</li>`).join("")}</ul><div class="row spaced"><strong class="price">${money(box.price)}</strong><span class="small muted">Còn ${box.stock}</span></div><a class="button" href="/hop-qua/${box.slug}?customize=1" data-route>Chọn hộp này</a></div></article>`).join("")}</div><div style="margin-top:34px"><button class="button ghost" data-action="finder-reset">Bắt đầu lại</button> <a class="button ghost" href="/hop-qua" data-route>Xem tất cả hộp</a></div></div></section>`;
+  pageTitle("Tìm quà nhanh");const f=state.finder,steps=finderQuestionSteps();f.step=Math.max(0,Math.min(Number(f.step||0),steps.length));
+  if(f.step<steps.length){const current=steps[f.step],valid=finderStepValid(current.id);return `<section class="page-hero"><div class="narrow"><span class="eyebrow">AI Gift Composer</span><h1>Hiểu người nhận trước khi ghép quà.</h1><p>Điều cần tránh được lọc cứng; AI chỉ ghép từ sản phẩm đang bán và tối đa 4 món trong một hộp.</p></div></section><section class="section"><div class="narrow finder-shell"><div class="finder-progress"><span style="--progress:${Math.round((f.step+1)/steps.length*100)}%"></span></div><div class="row spaced wrap"><span class="eyebrow">Câu ${f.step+1} / ${steps.length}</span><small class="muted">${esc(current.label)}</small></div>${finderQuestionBody(current.id)}<div class="row spaced finder-navigation"><button class="button ghost" data-action="${f.step?"finder-back":"finder-reset"}">${f.step?"Quay lại":"Bắt đầu lại"}</button><button class="button" data-action="finder-next" ${valid?"":"disabled"}>${f.step===steps.length-1?"Tạo 5 phương án":"Tiếp tục"}</button></div></div></section>`;}
+  const recommendations=finderRecommendations(),profile=finderProfile(),matchedPromptRule=selectFinderPromptRule(profile),ai=state.admin.ai||{},chatReady=!!(ai.enabled&&ai.endpoint&&ai.model&&aiSessionKey),summary=[profile.recipient,profile.occasion,profile.budget.tier].filter(Boolean).join(" · ");
+  return `<section class="page-hero"><div class="container results-intro"><div><span class="eyebrow">5 tổ hợp đã qua kiểm tra</span><h1>Chọn thành phần trước, chỉ tạo ảnh sau.</h1><p>${esc(summary)}. Mỗi phương án đã thử kích thước thật; ảnh dưới đây là ảnh riêng của từng món, chưa phải ảnh AI.</p></div><button class="button secondary" data-action="finder-edit">Sửa câu trả lời</button></div></section><section class="section"><div class="container"><div class="finder-ai-toolbar"><div><strong>${recommendations.some(x=>x.source==="api")?"AI Gift Composer đã match và lọc tổ hợp":"Đang dùng bộ ghép an toàn trong web"}</strong><p class="small muted">Tối đa 4 sản phẩm · không dùng ảnh style · ${matchedPromptRule?`đã chọn bộ prompt “${esc(matchedPromptRule.name||matchedPromptRule.id)}”`:`chưa có bộ prompt riêng phù hợp`} · chỉ tạo ảnh cho hộp khách chọn.${f.aiStage?` <b>${esc(f.aiStage)}</b>`:""}${f.aiError?` <b class="danger-text">${esc(f.aiError)}</b>`:""}</p></div><button class="button secondary small-btn" data-action="generate-gift-recommendations" ${chatReady&&!aiFinderBusy?"":"disabled"}>${aiFinderBusy?"AI đang xử lý…":"AI phối lại 5 hộp"}</button></div>${recommendations.length?`<div class="ai-gift-grid">${recommendations.map((candidate,index)=>{const box=packaging.find(x=>x.id===candidate.boxId),materials=(state.admin.materials3d||[]).filter(x=>candidate.materialIds.includes(x.id));return `<article class="ai-gift-card finder-combination-card"><div class="ai-gift-card-body"><div class="row spaced"><span class="eyebrow">Lựa chọn ${index+1}</span><span class="status ${candidate.source==="api"?"status-published":"status-draft"}">${candidate.source==="api"?"AI tổ hợp":"Bộ ghép cục bộ"}</span></div><h2>${esc(candidate.title||["Dịu dàng vừa đủ","Một chiều thật chậm","Ấm áp để gửi","Nhỏ xinh mà có ý","Đầy đặn đúng gu"][index])}</h2><p>${esc(candidate.reason)}</p>${finderProductStrip(candidate)}<div class="finder-packaging-summary"><span><b>Hộp</b>${esc(box?.name||candidate.boxName)}</span><span><b>Chèn lót</b>${esc(materials.map(x=>x.name).join(" · ")||"Tiêu chuẩn")}</span><span><b>Hoàn thiện</b>${esc(cards.find(x=>x.id===candidate.cardId)?.name||"")} · ${esc(ribbons.find(x=>x.id===candidate.ribbonId)?.name||"")}</span><span><b>Độ vừa</b>${candidate.layout?.metrics?.fillPercent||"—"}% đáy · hở nắp ${candidate.layout?.metrics?.lidClearanceMm||"—"} mm</span></div><div class="row spaced wrap"><div><strong class="price">${money(candidate.total)}</strong><small class="budget-label ${candidate.upgradeAmount?"upgrade":""}">${candidate.upgradeAmount?`Đáng nâng cấp · +${money(candidate.upgradeAmount)}`:"Trong ngân sách"}</small></div><button class="button" data-action="finder-select" data-id="${candidate.candidateId}">Chọn hộp này & tạo ảnh</button></div></div></article>`;}).join("")}</div>`:`<div class="empty-state"><h2>Chưa có tổ hợp hợp lệ.</h2><p>Hãy sửa ngân sách hoặc điều cần tránh để hệ thống thử lại.</p><button class="button secondary" data-action="finder-edit">Sửa câu trả lời</button></div>`}<div style="margin-top:34px"><button class="button ghost" data-action="finder-reset">Bắt đầu lại</button></div></div></section>`;
 }
 
 function authPage(){
@@ -977,7 +1139,8 @@ function buildFluxImagePrompt(validatedLayout, builderData, activeRefs) {
   const refIndex=new Map(activeRefs.map((line,index)=>[line.item.id,index]));
   const refMap = activeRefs.map((line, idx) => {
     const form = getProductFormFactor(line.item);
-    return `- input_image_${idx} = productId "${line.item.id}" = "${line.item.name}". Packaging form: ${form}. Copy this packaged product's silhouette, front color blocks, label placement and recognizable identity; do not copy its original background.`;
+    const visual=line.item.aiVisual||{},labelRule=visual.labelMode==="blank"?"leave all label areas blank":`replace every readable word with one simple ${visual.iconId||"category"} icon`;
+    return `- input_image_${idx} = productId "${line.item.id}" = "${line.item.name}". Packaging form: ${form}. Copy this packaged product's silhouette, front color blocks and recognizable identity; do not copy its original background. Label rule: ${labelRule}; never render readable text.`;
   }).join("\n");
 
   const productList = lines.map(line => {
@@ -985,7 +1148,8 @@ function buildFluxImagePrompt(validatedLayout, builderData, activeRefs) {
     const m = p.model3d || {};
     const form = getProductFormFactor(p);
     const reference=refIndex.has(p.id)?`input_image_${refIndex.get(p.id)}`:"text description only";
-    return `- productId=${p.id}; name="${p.name}"; EXACT quantity=${line.qty}; sealed form=[${form}]; real size=${Math.round(m.length || 100)}×${Math.round(m.width || 70)}×${Math.round(m.height || 45)} mm; visual source=${reference}.`;
+    const visual=p.aiVisual||{},labelRule=visual.labelMode==="blank"?"blank label, no characters":`single ${visual.iconId||"category"} icon instead of words`;
+    return `- productId=${p.id}; name="${p.name}"; EXACT quantity=${line.qty}; sealed form=[${form}]; real size=${Math.round(m.length || 100)}×${Math.round(m.width || 70)}×${Math.round(m.height || 45)} mm; visual source=${reference}; label treatment=${labelRule}.`;
   }).join("\n");
 
   const placementList = validatedLayout.configuration.instances.map((inst, idx) => {
@@ -994,15 +1158,21 @@ function buildFluxImagePrompt(validatedLayout, builderData, activeRefs) {
   }).join("\n");
 
   const materialsDesc = materials.length ? materials.map(m => `${m.name} (${m.kind}, ${m.thickness}mm)`).join(", ") : "Kraft shredded paper filler";
-  const cardDesc = card?.name ? `${card.name}${state.builder.message ? ` with printed note: "${state.builder.message}"` : ""}` : "No card";
+  const cardDesc = card?.name ? `${card.name}; keep its visible face blank or use one small decorative icon, never render message text` : "No card";
   const ribbonDesc = ribbon?.name ? `${ribbon.name} tied neatly as an accent` : "No ribbon";
   const basePrompt = state.admin.ai?.imagePrompt || DEFAULT_AI_IMAGE_PROMPT;
+  const profile=state.builder.finderProfile||null,imageRule=(state.admin.promptRules||[]).find(x=>x.id===state.builder.finderPromptRuleId&&x.active!==false)||selectFinderPromptRule(profile),imageRulePrompt=String(imageRule?.imagePrompt||"").trim(),preferredColor=profile?.softPreferences?.preferredColorId||"customer-selected packaging color",profileContext=profile?`- recipient=${profile.recipient||"not specified"}; formality=${profile.formality||"not specified"}; occasion=${profile.occasion||"not specified"}.
+- requested mood/style=${(profile.softPreferences?.styles||[]).join(", ")||"balanced premium"}; preferred color=${preferredColor}; gift type=${profile.softPreferences?.giftType||"mixed"}.
+- matched prompt profile=${imageRule?.name||imageRule?.id||"default"}. Treat this profile as mood and color guidance only. It must never change the locked box, manifest, dimensions or layout. No style-reference image is supplied or permitted.${imageRulePrompt?`\n- ADMIN-APPROVED IMAGE STYLE ADDENDUM: ${imageRulePrompt}`:""}`:"- No questionnaire profile was supplied. Follow only the locked customer selections. No style-reference image is supplied or permitted.";
 
   return `RENDER CONTRACT — obey literally.
 
 Create exactly ONE photorealistic premium e-commerce photograph of ONE open gift box. CAMERA IS STRICTLY ORTHOGRAPHIC TOP-DOWN 90 DEGREES: camera directly above the center, optical axis perpendicular to the box floor, zero tilt, zero oblique angle, zero three-quarter perspective. The four inner box edges are parallel to the four image edges. The open box is centered and fills about 86% of the frame; show a narrow neutral border around it. Keep the lid completely outside the frame.
 
 ${basePrompt}
+
+QUESTIONNAIRE-BASED ART DIRECTION (TEXT DATA ONLY):
+${profileContext}
 
 REFERENCE IDENTITY MAP:
 ${refMap}
@@ -1032,7 +1202,7 @@ FINAL COMPLIANCE CHECK BEFORE RENDERING:
 4. Use sealed retail packaging exactly as referenced. Do not unwrap food or turn flat cartons into jars/cylinders.
 5. Every main label is parallel to the image plane and faces camera. Do not stand, tilt, stack or cover products.
 6. Filler naturally occupies remaining negative space without altering the locked layout. Card and ribbon are accessories, not extra products.
-7. NO visible lid, hands, scissors, loose table props, captions, arrows, numbered markers, diagrams, collage, 3D wireframe, watermark or invented text.
+7. NO visible lid, hands, scissors, loose table props, captions, arrows, numbered markers, diagrams, collage, 3D wireframe, watermark, readable words, fake characters or invented text. Product label areas use only the declared icon or remain blank.
 8. TOP-DOWN 90° ONLY. Reject any slanted camera, 45° view, isometric view, visible side faces, perspective convergence or diagonal box edges.
 
 Output the final photograph only.`;
@@ -1503,7 +1673,7 @@ function infoPage(path){
 function adminShell(title,section,body,actions=""){
   pageTitle(title+" · Quản trị");
   const links=[
-    ["overview","/quan-tri","Tổng quan"],["products","/quan-tri/san-pham","Sản phẩm"],["inventory","/quan-tri/ton-kho","Tồn kho"],["options","/quan-tri/tuy-chon-hop","Tùy chọn hộp"],["library","/quan-tri/thu-vien-ai","Thư viện AI"],["orders","/quan-tri/don-hang","Đơn hàng"],["delivery","/quan-tri/giao-hang","Giao hàng"],["settings","/quan-tri/cai-dat","Cài đặt"],
+    ["overview","/quan-tri","Tổng quan"],["products","/quan-tri/san-pham","Sản phẩm"],["bulk","/quan-tri/nhap-hang-loat","Nhập hàng loạt"],["inventory","/quan-tri/ton-kho","Tồn kho"],["options","/quan-tri/tuy-chon-hop","Tùy chọn hộp"],["library","/quan-tri/thu-vien-ai","Ảnh style cũ"],["orders","/quan-tri/don-hang","Đơn hàng"],["delivery","/quan-tri/giao-hang","Giao hàng"],["settings","/quan-tri/cai-dat","Cài đặt"],
   ].filter(([key])=>canAdmin(key));
   return `<section class="admin-area"><div class="container admin-layout"><aside class="admin-sidebar"><a class="admin-brand" href="/quan-tri" data-route>Gói Thương <span>Quản trị</span></a><div class="admin-person"><strong>${esc(state.user.name)}</strong><span>${esc(ROLE_LABELS[state.user.role])}</span></div><nav>${links.map(([key,url,label])=>`<a href="${url}" data-route class="${section===key?"active":""}">${label}</a>`).join("")}</nav><a class="link small" href="/" data-route>← Về cửa hàng</a><button class="link small" data-action="logout">Đăng xuất</button></aside><div class="admin-main"><div class="admin-demo-note">Bản quản trị demo chạy trong trình duyệt. Bản thật phải kiểm tra quyền, dữ liệu và tệp tải lên ở máy chủ.</div><header class="admin-page-head"><div><span class="eyebrow">${esc(ROLE_LABELS[state.user.role])}</span><h1>${esc(title)}</h1></div>${actions}</header>${body}</div></div></section>`;
 }
@@ -1513,6 +1683,21 @@ function adminDenied(section){
 }
 
 function statusBadge(status){ const labels={published:"Đang bán",draft:"Bản nháp",paused:"Tạm dừng",archived:"Đã lưu trữ"}; return `<span class="status status-${esc(status)}">${labels[status]||esc(status)}</span>`; }
+function normalizeSkuKey(value){return String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase().replace(/[^A-Z0-9]/g,"");}
+function bulkImageFilesForSku(sku){const key=normalizeSkuKey(sku);return bulkImportDraft.imageFiles.filter(file=>{const stem=String(file.name||"").replace(/\.[^.]+$/,"");const normalized=normalizeSkuKey(stem);if(normalized===key)return true;const suffix=normalized.startsWith(key)?normalized.slice(key.length):"";return /^(FRONT|MAIN|BACK|SIDE|LEFT|RIGHT|TOP|MAT|ANH|[0-9]{1,2})$/.test(suffix);}).sort((a,b)=>/FRONT|MAIN/i.test(a.name)?-1:/FRONT|MAIN/i.test(b.name)?1:a.name.localeCompare(b.name)).slice(0,5);}
+function adminBulkImport(){
+  const d=bulkImportDraft,products=d.productRows||[],matched=products.filter(row=>bulkImageFilesForSku(row.sku).length).length,unmatchedImages=(d.imageFiles||[]).filter(file=>!products.some(row=>bulkImageFilesForSku(row.sku).includes(file))).length,currentRules=state.admin.promptRules?.length||0,currentCombos=state.admin.productCombinationTemplates?.length||0;
+  const body=`<section class="admin-card bulk-import-intro"><div><span class="eyebrow">BỘ NHẬP DỮ LIỆU AI</span><h2>Đưa prompt, tổ hợp, Excel và thư mục ảnh vào cùng một lần</h2><p class="muted">Hệ thống đọc file ngay trong trình duyệt, ghép ảnh theo SKU rồi cho xem trước. Chỉ khi bấm “Xác nhận nhập” dữ liệu mới được ghi vào catalog.</p></div><div class="bulk-current"><span>${currentRules} bộ prompt đang lưu</span><span>${currentCombos} tổ hợp mẫu đang lưu</span></div></section>
+  <section class="bulk-upload-grid">
+    <label class="admin-card bulk-upload-card"><span class="bulk-step">1</span><strong>File bộ prompt theo tiêu chí</strong><p>JSON hoặc CSV. Mỗi dòng gồm người nhận, dịp, style và prompt bổ sung cho match/tổ hợp/tạo ảnh.</p><input id="bulk-prompt-file" type="file" accept=".json,.csv,text/csv,application/json"><small>${esc(d.fileNames.prompts||"Chưa chọn file")}</small></label>
+    <label class="admin-card bulk-upload-card"><span class="bulk-step">2</span><strong>File tổ hợp sản phẩm</strong><p>JSON hoặc CSV. Mỗi tổ hợp chứa 2–4 SKU cùng tiêu chí người nhận, dịp và style.</p><input id="bulk-combination-file" type="file" accept=".json,.csv,text/csv,application/json"><small>${esc(d.fileNames.combinations||"Chưa chọn file")}</small></label>
+    <label class="admin-card bulk-upload-card"><span class="bulk-step">3</span><strong>File danh mục sản phẩm</strong><p>Excel .xlsx hoặc CSV. Mỗi dòng là một SKU với giá, tồn kho, kích thước mm, gram và metadata matching.</p><input id="bulk-product-file" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"><small>${esc(d.fileNames.products||"Chưa chọn file")}</small></label>
+    <label class="admin-card bulk-upload-card"><span class="bulk-step">4</span><strong>Thư mục ảnh theo SKU</strong><p>Chọn cả folder. Ví dụ GT-I01.jpg, GT-I01_front.png, GT-I01_2.webp. Tối đa 5 ảnh/SKU.</p><input id="bulk-image-folder" type="file" accept="image/jpeg,image/png,image/webp" webkitdirectory directory multiple><small>${d.imageFiles.length?`${d.imageFiles.length} ảnh đã chọn`:"Chưa chọn thư mục"}</small></label>
+  </section>
+  <section class="admin-card"><div class="row spaced wrap"><div><h2>File mẫu demo · 13 cột</h2><p class="muted small">Tải mẫu, điền từ dòng 2 rồi nhập lại. Các giá trị nhiều lựa chọn ngăn cách bằng dấu |. Mỗi màu hoặc hương là một SKU biến thể riêng.</p></div><div class="row wrap"><a class="button ghost small-btn" href="/templates/mau-san-pham-goi-thuong.xlsx" download>Tải mẫu sản phẩm Excel</a><a class="button ghost small-btn" href="/templates/mau-bo-prompt.json" download>Tải mẫu prompt JSON</a><a class="button ghost small-btn" href="/templates/mau-to-hop-san-pham.csv" download>Tải mẫu tổ hợp CSV</a></div></div><div class="bulk-schema"><code>SKU biến thể, Tên sản phẩm, Danh mục, Giá bán, Tồn kho, Kích thước mm, Gram, Người nhận, Dịp, Sở thích, Style, Điều cần tránh, Thuộc tính quà</code></div><details class="bulk-field-guide"><summary>13 cột này trả lời questionnaire thế nào?</summary><div class="bulk-guide-grid"><div><strong>Nhận diện & ngân sách</strong><span>SKU biến thể, tên, danh mục, giá và tồn kho.</span></div><div><strong>Xếp hộp đúng tỷ lệ</strong><span>Kích thước nhập dạng dài×rộng×cao mm; gram dùng cho tải trọng.</span></div><div><strong>Matching chính</strong><span>Người nhận, dịp, sở thích và style khớp trực tiếp câu trả lời quiz.</span></div><div><strong>Hard filter</strong><span>Điều cần tránh chứa có cồn, đường, dị ứng, không chay, mùi nồng hoặc riêng tư.</span></div><div><strong>Loại quà, màu & tuổi</strong><span>Thuộc tính quà dùng cú pháp gift:consumable | color:cream | age:12.</span></div><div><strong>Ảnh đúng biến thể</strong><span>Tên ảnh theo đúng SKU, ví dụ TRA01-JAS_front.jpg; ảnh đầu tiên là mặt chính.</span></div></div></details></section>
+  <section class="admin-card"><div class="row spaced wrap"><div><h2>Kiểm tra trước khi nhập</h2><p class="muted small">Cập nhật trùng SKU; tạo mới SKU chưa có. Ảnh được nén cho bản demo và ảnh đầu tiên làm ảnh chính.</p></div><span class="status ${d.errors.length?"status-draft":"status-published"}">${d.errors.length?`${d.errors.length} lỗi cần sửa`:"Sẵn sàng kiểm tra"}</span></div><div class="bulk-metrics"><div><strong>${d.promptRules.length}</strong><span>bộ prompt</span></div><div><strong>${d.combinationTemplates.length}</strong><span>tổ hợp mẫu</span></div><div><strong>${products.length}</strong><span>dòng sản phẩm</span></div><div><strong>${matched}/${products.length}</strong><span>SKU có ảnh</span></div><div><strong>${unmatchedImages}</strong><span>ảnh chưa khớp</span></div></div>${d.errors.length?`<div class="notice error"><strong>Chưa thể nhập:</strong><ul>${d.errors.slice(0,12).map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`:""}${products.length?`<div class="table-wrap"><table class="admin-table"><thead><tr><th>SKU</th><th>Sản phẩm</th><th>Giá</th><th>Kích thước</th><th>Ảnh khớp</th><th>Xử lý</th></tr></thead><tbody>${products.slice(0,12).map(row=>{const existing=state.admin.products.find(x=>normalizeSkuKey(x.sku)===normalizeSkuKey(row.sku)),images=bulkImageFilesForSku(row.sku);return `<tr><td><strong>${esc(row.sku)}</strong></td><td>${esc(row.name)}</td><td>${money(row.price)}</td><td>${row.lengthMm}×${row.widthMm}×${row.heightMm} mm</td><td>${images.length}</td><td>${existing?"Cập nhật":"Tạo mới"}</td></tr>`;}).join("")}</tbody></table></div>`:"<div class=\"empty-state compact\">Chọn file để xem trước dữ liệu.</div>"}<div class="row spaced wrap" style="margin-top:20px"><button class="button ghost" data-action="reset-bulk-import" ${d.busy?"disabled":""}>Xóa bản xem trước</button><button class="button" data-action="commit-bulk-import" ${(d.busy||d.errors.length||(!d.promptRules.length&&!d.combinationTemplates.length&&!products.length))?"disabled":""}>${d.busy?"Đang nén ảnh & nhập…":"Xác nhận nhập dữ liệu"}</button></div></section>`;
+  return adminShell("Nhập hàng loạt","bulk",body);
+}
 function adminOverview(){
   const low=state.admin.products.filter(p=>p.status!=="archived"&&Number(p.stock)<=Number(p.threshold||0));
   const pending=state.orders.filter(o=>!["Đã giao","Đã hủy"].includes(o.status));
@@ -1531,8 +1716,12 @@ function adminProducts(){
   return adminShell("Sản phẩm","products",body,'<a class="button" href="/quan-tri/san-pham/moi" data-route>+ Thêm sản phẩm</a>');
 }
 
-function physicalProductForm(html){
+function physicalProductForm(html,product={}){
+  const matching=product.matchingTags||{},restrictions=product.restrictionTags||{},variants=Array.isArray(product.variantData)?product.variantData:[];
+  const aiFields=`<section class="admin-card"><div class="row spaced wrap"><div><span class="eyebrow">AI Gift Composer</span><h2>Matching, hạn chế & biến thể</h2><p class="muted small">Text AI chỉ nhận metadata này; ảnh mặt chính chỉ gửi sang AI ảnh sau khi khách chọn hộp.</p></div><span class="status">Tối đa 4 món/hộp</span></div><div class="form-grid"><div class="field"><label>Người nhận phù hợp</label><input name="matchRecipients" value="${esc((matching.recipients||product.recipients||[]).join(", "))}" placeholder="Mẹ, Bạn thân, Đồng nghiệp"></div><div class="field"><label>Dịp phù hợp</label><input name="matchOccasions" value="${esc((matching.occasions||product.occasions||[]).join(", "))}"></div><div class="field"><label>Sở thích</label><input name="matchInterests" value="${esc((matching.interests||[]).join(", "))}" placeholder="Trà, cà phê, thư giãn"></div><div class="field"><label>Phong cách</label><input name="matchStyles" value="${esc((matching.styles||product.tags||[]).join(", "))}"></div><div class="field"><label>Loại quà</label><select name="matchGiftType"><option value="">Tự động</option><option value="consumable" ${matching.giftType==="consumable"?"selected":""}>Dùng hết</option><option value="keepsake" ${matching.giftType==="keepsake"?"selected":""}>Giữ lâu</option><option value="mixed" ${matching.giftType==="mixed"?"selected":""}>Kết hợp</option></select></div><div class="field"><label>Màu nhận diện</label><input name="matchColors" value="${esc((matching.colors||[]).join(", "))}"></div></div><div class="form-grid four"><label class="checkline"><input name="containsAlcohol" type="checkbox" ${restrictions.containsAlcohol?"checked":""}> Có cồn</label><label class="checkline"><input name="vegetarian" type="checkbox" ${restrictions.vegetarian!==false?"checked":""}> Phù hợp ăn chay</label><div class="field"><label>Mức đường</label><select name="sugarLevel"><option value="none" ${restrictions.sugarLevel==="none"?"selected":""}>Không đường</option><option value="low" ${restrictions.sugarLevel==="low"?"selected":""}>Thấp</option><option value="normal" ${!restrictions.sugarLevel||restrictions.sugarLevel==="normal"?"selected":""}>Bình thường</option><option value="high" ${restrictions.sugarLevel==="high"?"selected":""}>Cao</option></select></div><div class="field"><label>Cường độ mùi</label><select name="fragranceIntensity"><option value="none">Không mùi</option><option value="light" ${restrictions.fragranceIntensity==="light"?"selected":""}>Nhẹ</option><option value="medium" ${restrictions.fragranceIntensity==="medium"?"selected":""}>Vừa</option><option value="strong" ${restrictions.fragranceIntensity==="strong"?"selected":""}>Nồng</option></select></div><div class="field"><label>Tuổi tối thiểu</label><input name="minimumAge" type="number" min="0" value="${Number(restrictions.minimumAge||0)}"></div><div class="field"><label>Dị ứng (dấu phẩy)</label><input name="restrictionAllergens" value="${esc((restrictions.allergens||product.allergens||[]).join(", "))}"></div><div class="field"><label>Nhãn dùng trong ảnh AI</label><select name="aiLabelMode"><option value="icon" ${product.aiVisual?.labelMode==="icon"?"selected":""}>Thay chữ bằng icon</option><option value="blank" ${product.aiVisual?.labelMode==="blank"?"selected":""}>Để trống</option><option value="preserve_reference" ${product.aiVisual?.labelMode==="preserve_reference"?"selected":""}>Giữ ảnh tham chiếu</option></select></div><div class="field"><label>Icon danh mục</label><input name="aiIconId" value="${esc(product.aiVisual?.iconId||"")}" placeholder="tea_leaf, candle, coffee_bean..."></div></div><div class="field"><label>Biến thể sản phẩm (mỗi dòng: SKU | tên | giá | tồn | dài×rộng×cao mm)</label><textarea name="variantData" placeholder="GT-I01-JAS | Trà lài | 109000 | 12 | 105x65x55">${esc(variants.map(v=>`${v.sku||""} | ${v.name||""} | ${v.price||0} | ${v.stockQuantity||0} | ${v.dimensions?.lengthMm||0}x${v.dimensions?.widthMm||0}x${v.dimensions?.heightMm||0}`).join("\n"))}</textarea></div></section>`;
   return html
+    .replace('<div class="field"><label>Thẻ</label><input name="tags"',`<div class="field"><label>Thương hiệu</label><input name="brand" value="${esc(product.brand||"")}"></div><div class="field"><label>Nhà bán hàng</label><input name="seller" value="${esc(product.seller||"")}"></div><div class="field"><label>Thẻ</label><input name="tags"`)
+    .replace('<div class="field"><label>Giá vốn</label>',`<div class="field"><label>Giá khuyến mãi</label><input name="salePrice" type="number" min="0" value="${Number(product.salePrice||0)}"></div><div class="field"><label>Giá vốn</label>`)
     .replace("Mô hình 3D & đóng gói","Ảnh chính & kích thước đóng gói")
     .replace("Dữ liệu vật lý cho Builder","Dữ liệu để tạo phương án bằng AI")
     .replace("Mô hình hiển thị và collider được quản lý riêng. Đơn vị: mm và g.","Nhập kích thước thật theo mm và ảnh mặt chính. Mặt này luôn được đặt hướng lên trên.")
@@ -1540,7 +1729,9 @@ function physicalProductForm(html){
     .replace("Dạng đơn giản","Dạng bao bì")
     .replace("Collider","Hình bao kiểm tra")
     .replace(/<label class="checkline"><input name="modelUpright"[^>]*> Phải giữ đứng<\/label>/,"")
-    .replace(/<input type="hidden" name="modelFileName"[^>]*><p class="fine-print">Bản demo chỉ lưu tên tệp GLB[\s\S]*?<\/p>/,"<p class=\"fine-print\">Ảnh mặt chính, kích thước và quy tắc dễ vỡ được dùng để tạo một phương án tốt nhất. Hệ thống không lật úp sản phẩm.</p>");
+    .replace(/<input type="hidden" name="modelFileName"[^>]*><p class="fine-print">Bản demo chỉ lưu tên tệp GLB[\s\S]*?<\/p>/,"<p class=\"fine-print\">Ảnh mặt chính, kích thước và quy tắc dễ vỡ được dùng để tạo một phương án tốt nhất. Hệ thống không lật úp sản phẩm.</p>")
+    .replace('<section class="admin-card"><div class="row spaced wrap"><div><h2>Ảnh sản phẩm</h2>',`${aiFields}<section class="admin-card"><div class="row spaced wrap"><div><h2>Ảnh sản phẩm</h2>`)
+    .replace("JPG, PNG hoặc WebP · tối đa 5MB/ảnh · tối đa 8 ảnh.","Tối thiểu nên có 3–5 ảnh: đại diện nền sạch, mặt chính, mặt sau/bên và ảnh trong hộp. JPG/PNG/WebP · tối đa 5MB/ảnh.");
 }
 
 function productForm(id=""){
@@ -1550,7 +1741,7 @@ function productForm(id=""){
   const m=p.model3d||defaultModel3d(p);if(!Object.prototype.hasOwnProperty.call(state.admin.modelPhotos,key))state.admin.modelPhotos[key]=m.textureData||"";const modelPhoto=state.admin.modelPhotos[key]||"";
   const imageHtml=images.map((img,i)=>`<div class="upload-card"><img src="${esc(img.data)}" alt="${esc(img.alt||img.name)}"><input value="${esc(img.alt||"")}" data-image-alt="${img.id}" data-key="${key}" placeholder="Mô tả ảnh"><div class="row wrap"><button class="link small" data-action="image-cover" data-id="${img.id}" data-key="${key}">${img.cover?"Ảnh bìa ✓":"Đặt ảnh bìa"}</button><button class="link small" data-action="image-left" data-id="${img.id}" data-key="${key}">←</button><button class="link small" data-action="image-right" data-id="${img.id}" data-key="${key}">→</button><button class="link small danger-text" data-action="image-remove" data-id="${img.id}" data-key="${key}">Xóa</button></div></div>`).join("");
   const body=`<form id="product-form" class="admin-form" data-key="${key}"><input type="hidden" name="id" value="${esc(id)}"><section class="admin-card"><div class="row spaced wrap"><div><h2>Thông tin cơ bản</h2><p class="muted small">Mọi trường đang nhập được giữ nguyên nếu có lỗi kiểm tra.</p></div><label class="field compact-field">Loại sản phẩm<select name="kind"><option value="item" ${p.kind==="item"?"selected":""}>Món lẻ</option><option value="box" ${p.kind==="box"?"selected":""}>Hộp phối sẵn</option></select></label></div><div class="form-grid"><div class="field"><label>Tên *</label><input name="name" required value="${esc(p.name)}"></div><div class="field"><label>SKU *</label><input name="sku" required value="${esc(p.sku)}"></div><div class="field"><label>Slug *</label><input name="slug" required pattern="[a-z0-9-]+" value="${esc(p.slug)}"></div><div class="field"><label>Trạng thái</label><select name="status">${[["draft","Bản nháp"],["published","Đăng bán"],["paused","Tạm dừng"],["archived","Lưu trữ"]].map(([v,n])=>`<option value="${v}" ${p.status===v?"selected":""}>${n}</option>`).join("")}</select></div></div><div class="field"><label>Mô tả ngắn *</label><textarea name="short" required>${esc(p.short||p.meaning||"")}</textarea></div><div class="field"><label>Mô tả đầy đủ</label><textarea name="long">${esc(p.long||"")}</textarea></div><div class="form-grid"><div class="field"><label>Danh mục (ngăn bằng dấu phẩy)</label><input name="categories" value="${esc((p.categories||p.occasions||[]).join(", "))}"></div><div class="field"><label>Thẻ</label><input name="tags" value="${esc((p.tags||[]).join(", "))}"></div></div></section><section class="admin-card"><h2>Giá và tồn kho</h2><div class="form-grid four"><div class="field"><label>Giá bán *</label><input name="price" type="number" min="0" required value="${p.price}"></div><div class="field"><label>Giá vốn</label><input name="cost" type="number" min="0" value="${p.cost||0}"></div><div class="field"><label>Tồn hiện tại</label><input name="stock" type="number" min="0" value="${p.stock||0}"></div><div class="field"><label>Ngưỡng cảnh báo</label><input name="threshold" type="number" min="0" value="${p.threshold||0}"></div><div class="field"><label>Ngày chuẩn bị</label><input name="lead" type="number" min="0" value="${p.lead||1}"></div><div class="field"><label>Dung lượng món</label><input name="size" type="number" min="1" value="${p.size||p.capacity||1}"></div></div><label class="checkline"><input name="builderEnabled" type="checkbox" ${p.builderEnabled!==false?"checked":""}> Cho phép dùng trong Builder (áp dụng món lẻ)</label></section><section class="admin-card"><h2>Cấu hình hộp phối sẵn</h2><div class="field"><label>Mỗi món một dòng</label><textarea name="items" placeholder="Nến thơm 80g&#10;Trà ô long 6 gói">${esc((p.items||[]).join("\n"))}</textarea></div><div class="form-grid"><div class="field"><label>Phong cách</label><input name="style" value="${esc(p.style||"")}"></div><div class="field"><label>Người nhận (dấu phẩy)</label><input name="recipients" value="${esc((p.recipients||[]).join(", "))}"></div></div></section><section class="admin-card model3d-admin"><div class="row spaced wrap"><div><span class="eyebrow">Mô hình 3D & đóng gói</span><h2>Dữ liệu vật lý cho Builder</h2><p class="muted small">Mô hình hiển thị và collider được quản lý riêng. Đơn vị: mm và g.</p></div><span class="status ${m.modelStatus==="checked"?"status-published":"status-draft"}">${m.modelStatus==="checked"?"Đã kiểm tra":"Bản nháp"}</span></div><div class="model3d-preview"><div class="simple-model ${m.shape}"><span>${m.shape==="cylinder"?"Hình trụ":"Khối hộp"}</span></div><div><strong>${esc(m.sourceName||"Mô hình kích thước đơn giản")}</strong><p class="small muted">${m.length} × ${m.width} × ${m.height} mm · ${m.weight} g</p><label class="button secondary small-btn file-button">Tải GLB<input id="product-model3d" type="file" accept=".glb,model/gltf-binary" hidden></label><span id="model3d-status" class="fine-print">${m.fileName?`Tệp đã chọn: ${esc(m.fileName)}`:"Chưa có GLB; Builder dùng hình học đơn giản đúng kích thước."}</span></div></div><div class="form-grid four"><div class="field"><label>Dạng đơn giản</label><select name="modelShape"><option value="box" ${m.shape==="box"?"selected":""}>Khối hộp</option><option value="cylinder" ${m.shape==="cylinder"?"selected":""}>Hình trụ</option></select></div><div class="field"><label>Dài (mm)</label><input name="modelLength" type="number" min="1" required value="${m.length}"></div><div class="field"><label>Rộng (mm)</label><input name="modelWidth" type="number" min="1" required value="${m.width}"></div><div class="field"><label>Cao (mm)</label><input name="modelHeight" type="number" min="1" required value="${m.height}"></div><div class="field"><label>Khối lượng (g)</label><input name="modelWeight" type="number" min="1" required value="${m.weight}"></div><div class="field"><label>Khoảng đệm (mm)</label><input name="modelPadding" type="number" min="0" value="${m.padding||0}"></div><div class="field"><label>Collider</label><select name="modelCollider"><option value="box" ${m.collider==="box"?"selected":""}>Hộp</option><option value="cylinder" ${m.collider==="cylinder"?"selected":""}>Trụ</option></select></div><div class="field"><label>Tải đỡ tối đa (g)</label><input name="modelMaxLoad" type="number" min="0" value="${m.maxLoad||0}"></div></div><div class="model-rules"><label class="checkline"><input name="modelUpright" type="checkbox" ${m.upright?"checked":""}> Phải giữ đứng</label><label class="checkline"><input name="modelFragile" type="checkbox" ${m.fragile?"checked":""}> Dễ vỡ / cần cẩn thận</label><label class="checkline"><input name="modelCompressible" type="checkbox" ${m.compressible?"checked":""}> Dễ móp</label><label class="checkline"><input name="modelCanSupport" type="checkbox" ${m.canSupport?"checked":""}> Có thể đỡ món khác</label><label class="checkline"><input name="modelChecked" type="checkbox" ${m.modelStatus==="checked"?"checked":""}> Đã đối chiếu kích thước thật</label></div><input type="hidden" name="modelFileName" value="${esc(m.fileName||"")}"><p class="fine-print">Bản demo chỉ lưu tên tệp GLB trong trình duyệt; mô hình đơn giản vẫn là nguồn hình học bền vững. Bản vận hành cần object storage, kiểm tra quyền sở hữu và pipeline kiểm duyệt tệp.</p></section><section class="admin-card"><div class="row spaced wrap"><div><h2>Ảnh sản phẩm</h2><p class="muted small">JPG, PNG hoặc WebP · tối đa 5MB/ảnh · tối đa 8 ảnh.</p></div><label class="button secondary small-btn file-button">Chọn ảnh từ thiết bị<input id="product-images" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden></label></div><div id="upload-status" class="fine-print"></div><div class="upload-grid">${imageHtml||'<div class="empty-state compact">Chưa có ảnh. Bạn có thể chỉ dùng tên sản phẩm như hiện tại.</div>'}</div></section><div id="product-error" class="field-error" role="alert"></div><div class="admin-form-actions"><a class="button ghost" href="/quan-tri/san-pham" data-route>Hủy</a><button class="button secondary" type="button" data-action="product-preview">Xem trước</button><button class="button" type="button" data-action="save-product">${editing?"Cập nhật sản phẩm":"Lưu sản phẩm"}</button></div></form>`;
-  return adminShell(editing?"Sửa sản phẩm":"Thêm sản phẩm","products",physicalProductForm(body));
+  return adminShell(editing?"Sửa sản phẩm":"Thêm sản phẩm","products",physicalProductForm(body,p));
 }
 
 function adminInventory(){
@@ -1585,8 +1776,9 @@ function adminDelivery(){
 }
 
 function adminAiLibrary(){
+  const archivedRefs=state.admin.aiReferences||[],archivedCards=archivedRefs.map(ref=>`<article class="reference-card"><img src="${esc(ref.data)}" alt="${esc(ref.title)}"><div><span class="status status-draft">Không gửi sang AI</span><h3>${esc(ref.title)}</h3><p>${esc(ref.occasion||"Dịp khác")} · ${esc(ref.style||"Phong cách khác")}</p><button class="link small danger-text" data-action="delete-ai-reference" data-id="${ref.id}">Xóa ảnh</button></div></article>`).join(""),archiveBody=`<section class="admin-card library-intro"><div><span class="eyebrow">ĐÃ THAY ĐỔI FLOW</span><h2>Ảnh style đã được loại khỏi luồng AI</h2><p class="muted">AI ảnh chỉ nhận ảnh mặt chính của đúng sản phẩm khách chọn. Style, dịp và người nhận bây giờ được chọn từ bộ prompt dạng text tại trang Nhập hàng loạt.</p></div><a class="button" href="/quan-tri/nhap-hang-loat" data-route>Nhập bộ prompt</a></section><section class="admin-card"><div class="row spaced wrap"><div><h2>Ảnh tham khảo cũ</h2><p class="muted small">Các ảnh dưới đây chỉ được giữ để bạn tải/xóa thủ công; website không gửi chúng tới Text AI hoặc FLUX.</p></div><span class="status">${archivedRefs.length} ảnh lưu trữ</span></div><div class="reference-grid">${archivedCards||'<div class="empty-state"><h3>Không còn ảnh style.</h3><p>Đây là trạng thái đúng của flow mới.</p></div>'}</div></section>`;return adminShell("Ảnh style cũ","library",archiveBody);
   const refs=state.admin.aiReferences||[],active=refs.filter(x=>x.active!==false).length;
-  const cards=refs.map(ref=>`<article class="reference-card ${ref.active===false?"inactive":""}"><img src="${esc(ref.data)}" alt="${esc(ref.title)}"><div><div class="row spaced"><span class="status ${ref.active===false?"status-draft":"status-published"}">${ref.active===false?"Đang ẩn":"Đang dùng"}</span><small>${esc(ref.boxShape||"Hộp khác")}</small></div><h3>${esc(ref.title)}</h3><p>${esc(ref.occasion||"Dịp khác")} · ${esc(ref.style||"Phong cách khác")} · ${Number(ref.itemCount||0)} món</p><small>${esc(ref.notes||"Chưa có ghi chú bố cục.")}</small><div class="row wrap"><button class="link small" data-action="toggle-ai-reference" data-id="${ref.id}">${ref.active===false?"Bật lại":"Tạm ẩn"}</button><button class="link small danger-text" data-action="delete-ai-reference" data-id="${ref.id}">Xóa ảnh</button></div></div></article>`).join("");
+  const cards=refs.map(ref=>`<article class="reference-card ${ref.active===false?"inactive":""}"><img src="${esc(ref.data)}" alt="${esc(ref.title)}"><div><div class="row spaced"><span class="status status-draft">Ảnh cũ · không gửi AI</span><small>${esc(ref.boxShape||"Hộp khác")}</small></div><h3>${esc(ref.title)}</h3><p>${esc(ref.occasion||"Dịp khác")} · ${esc(ref.style||"Phong cách khác")} · ${Number(ref.itemCount||0)} món</p><small>${esc(ref.notes||"Chưa có ghi chú bố cục.")}</small><div class="row wrap"><button class="link small danger-text" data-action="delete-ai-reference" data-id="${ref.id}">Xóa ảnh</button></div></div></article>`).join("");
   const body=`<section class="admin-card library-intro"><div><span class="eyebrow">Dữ liệu tham khảo</span><h2>${refs.length} ảnh · ${active} đang hoạt động</h2><p class="muted">AI chỉ học cách trình bày từ ảnh này; ảnh tham khảo không được phép làm thay đổi danh sách sản phẩm thật của khách.</p></div><a class="button secondary" href="/quan-tri/cai-dat" data-route>Chỉnh prompt & API</a></section><form id="ai-reference-form" class="admin-card admin-form"><div class="row spaced wrap"><div><h2>Thêm ảnh tham khảo</h2><p class="muted small">JPG, PNG hoặc WebP · tối đa 5MB/ảnh · có thể chọn nhiều ảnh.</p></div><label class="button small-btn file-button">Chọn hình ảnh<input id="ai-reference-images" name="images" type="file" accept="image/jpeg,image/png,image/webp" multiple required hidden></label></div><div class="form-grid"><div class="field"><label>Tên bộ mẫu *</label><input name="title" required placeholder="Ví dụ: Sinh nhật tối giản"></div><div class="field"><label>Dịp</label><select name="occasion"><option>Sinh nhật</option><option>Kỷ niệm</option><option>Valentine / White Day</option><option>Self-care</option><option>Giáng sinh</option><option>8/3 & 20/10</option><option>Khác</option></select></div><div class="field"><label>Phong cách</label><select name="style"><option>Tối giản</option><option>Sang trọng</option><option>Dễ thương</option><option>Tự nhiên</option><option>Lãng mạn</option><option>Ấm áp</option></select></div><div class="field"><label>Số món trong mẫu</label><input name="itemCount" type="number" min="1" max="20" value="4"></div><div class="field"><label>Dạng hộp</label><select name="boxShape"><option>Chữ nhật</option><option>Vuông</option><option>Hộp sâu</option><option>Khác</option></select></div><div class="field"><label>Ghi chú bố cục</label><input name="notes" placeholder="Món nặng ở giữa, màu sáng ở góc trên..."></div></div><div id="reference-upload-status" class="fine-print"></div><button class="button">Thêm vào thư viện</button></form><section class="admin-card"><div class="row spaced wrap"><div><h2>Kho ảnh tham khảo</h2><p class="muted small">Ẩn ảnh để tạm ngừng gửi cho AI, hoặc xóa nếu không còn sử dụng.</p></div><span class="status">Tối đa khuyến nghị 300 mẫu</span></div><div class="reference-grid">${cards||'<div class="empty-state"><h3>Chưa có ảnh tham khảo.</h3><p>Thêm khoảng 20–30 ảnh tốt trước, sau đó mở rộng theo dịp và phong cách.</p></div>'}</div></section>`;
   return adminShell("Thư viện AI","library",body);
 }
@@ -1711,15 +1903,17 @@ function adminSettings(){
         </div>
       </div>
 
-      <div class="field" style="margin-top: 14px;">
-        <label>Prompt gợi ý quà tặng nhanh (AI Finder)</label>
-        <textarea name="recommendationPrompt" class="ai-prompt-field" style="min-height: 80px;" spellcheck="false">${esc(ai.recommendationPrompt||DEFAULT_AI_RECOMMENDATION_PROMPT)}</textarea>
-      </div>
+      <section class="admin-card" style="margin-top: 14px;">
+        <div class="row spaced wrap"><div><span class="eyebrow">AI GIFT COMPOSER</span><h2>Ba prompt ghép quà theo questionnaire</h2><p class="muted small">Text AI xử lý metadata sản phẩm theo ba chặng. Bộ kiểm tra của website vẫn quyết định tồn kho, ngân sách, kích thước hộp và va chạm.</p></div><span class="status">2–4 món · đúng 5 kết quả</span></div>
+        <div class="field" style="margin-top: 12px;"><label>1. Prompt match từng sản phẩm</label><textarea name="productMatchPrompt" class="ai-prompt-field" style="min-height: 180px;" spellcheck="false">${esc(ai.productMatchPrompt||GIFT_PRODUCT_MATCH_PROMPT)}</textarea><span class="fine-print">Nhận questionnaire + danh mục hợp lệ, trả tối đa 24 productId và điểm phù hợp.</span></div>
+        <div class="field" style="margin-top: 12px;"><label>2. Prompt ghép tổ hợp sản phẩm</label><textarea name="combinationPrompt" class="ai-prompt-field" style="min-height: 180px;" spellcheck="false">${esc(ai.combinationPrompt||GIFT_COMBINATION_PROMPT)}</textarea><span class="fine-print">Chỉ ghép 2–4 productId. Website sẽ thử từng tổ hợp vào hộp bằng kích thước millimet.</span></div>
+        <div class="field" style="margin-top: 12px;"><label>3. Prompt chọn lại 5 tổ hợp cuối</label><textarea name="rerankPrompt" class="ai-prompt-field" style="min-height: 160px;" spellcheck="false">${esc(ai.rerankPrompt||GIFT_RERANK_PROMPT)}</textarea><span class="fine-print">Chỉ được chọn candidateId đã vượt qua kiểm tra tồn kho, ngân sách và hình học.</span></div>
+      </section>
 
       <div class="row wrap" style="margin-top: 18px;">
         <button class="button">Lưu cấu hình AI</button>
         <button class="button ghost" type="button" data-action="clear-ai-key" ${(aiSessionKey || aiImageSessionKey) ? "" : "disabled"}>Xóa toàn bộ API key khỏi phiên</button>
-        <a class="button secondary" href="/quan-tri/thu-vien-ai" data-route>Quản lý ảnh tham khảo</a>
+        <a class="button secondary" href="/quan-tri/thu-vien-ai" data-route>Ảnh style cũ (không dùng)</a>
       </div>
     </section>
   </form>
@@ -1746,6 +1940,7 @@ function adminRoute(path){
   if(path==="/quan-tri/san-pham/moi") return canAdmin("products")?productForm():adminDenied("sản phẩm");
   const edit=path.match(/^\/quan-tri\/san-pham\/([^/]+)\/sua$/); if(edit) return canAdmin("products")?productForm(decodeURIComponent(edit[1])):adminDenied("sản phẩm");
   if(path==="/quan-tri/san-pham") return canAdmin("products")?adminProducts():adminDenied("sản phẩm");
+  if(path==="/quan-tri/nhap-hang-loat") return canAdmin("bulk")?adminBulkImport():adminDenied("nhập hàng loạt");
   if(path==="/quan-tri/ton-kho") return canAdmin("inventory")?adminInventory():adminDenied("tồn kho");
   if(path==="/quan-tri/tuy-chon-hop") return canAdmin("options")?adminOptions():adminDenied("tùy chọn hộp");
   if(path==="/quan-tri/thu-vien-ai") return canAdmin("library")?adminAiLibrary():adminDenied("thư viện AI");
@@ -1812,6 +2007,11 @@ function saveDraft(){ if(!state.user){navigate(`/dang-nhap?returnTo=${encodeURIC
 function handleAction(el){
   const a=el.dataset.action;
   if(a==="open-menu") return openMenu(); if(a==="close-drawer") return closeDrawer();
+  if(a==="download-prompt-template")return downloadAdminTemplate("goi-thuong-prompt-rules.json",JSON.stringify([{id:"birthday-friend-minimal",name:"Sinh nhật bạn bè tối giản",recipients:["Bạn thân","Bạn bè"],occasions:["Sinh nhật"],styles:["Tối giản"],matchPrompt:"Ưu tiên sản phẩm trẻ trung, dễ dùng và không quá riêng tư.",combinationPrompt:"Tạo tổ hợp cân bằng giữa một món chính, một món dùng được và một điểm nhấn nhỏ.",rerankPrompt:"Ưu tiên tổ hợp gọn, khác danh mục và có màu sắc hài hòa.",imagePrompt:"Minimal warm editorial styling, restrained cream and sage palette, generous but controlled negative space.",priority:10,active:true}],null,2),"application/json;charset=utf-8");
+  if(a==="download-combination-template")return downloadAdminTemplate("goi-thuong-product-combinations.csv",'id,name,productSkus,recipients,occasions,styles,concept,note,active\ncombo-001,Trà và thư giãn,"GT-I01|GT-I04|GT-I08","Mẹ|Bạn thân",Sinh nhật,"Tối giản|Ấm áp",Một buổi trà chậm,Tối đa 3 món,true');
+  if(a==="download-product-template")return downloadAdminTemplate("goi-thuong-products-demo.csv",'SKU biến thể,Tên sản phẩm,Danh mục,Giá bán,Tồn kho,Kích thước mm,Gram,Người nhận,Dịp,Sở thích,Style,Điều cần tránh,Thuộc tính quà\nTRA01-JAS,Trà lài 50g,Trà,105000,20,105x65x55,90,"Mẹ|Bạn thân","Sinh nhật|Cảm ơn / Tri ân","Trà, cà phê|Thư giãn, sức khỏe","Tối giản|Ấm áp","hạn chế đường","gift:consumable|color:cream|age:12"');
+  if(a==="reset-bulk-import"){bulkImportDraft={promptRules:[],combinationTemplates:[],productRows:[],imageFiles:[],errors:[],fileNames:{},busy:false};return render();}
+  if(a==="commit-bulk-import")return commitBulkImport();
   if(a==="duplicate-product"){const p=state.admin.products.find(x=>x.id===el.dataset.id);if(!p)return;const copy=structuredClone(p),stamp=Date.now().toString().slice(-5);copy.id=crypto.randomUUID();copy.name=p.name+" · bản sao";copy.sku=`${p.sku}-C${stamp}`;copy.slug=`${p.slug}-ban-sao-${stamp}`;copy.status="draft";copy.images=structuredClone(p.images||[]).map(x=>({...x,id:crypto.randomUUID(),cover:false}));if(copy.images[0])copy.images[0].cover=true;state.admin.products.unshift(copy);audit("Nhân bản sản phẩm",copy.name);save();syncStorefront();toast("Đã tạo bản nháp sao chép.");return render();}
   if(a==="toggle-product"){const p=state.admin.products.find(x=>x.id===el.dataset.id);if(!p)return;p.status=p.status==="published"?"paused":"published";audit(p.status==="published"?"Đăng bán":"Tạm dừng",p.name);save();syncStorefront();return render();}
   if(a==="archive-product"){const p=state.admin.products.find(x=>x.id===el.dataset.id);if(!p)return;p.status="archived";audit("Lưu trữ sản phẩm",p.name);save();syncStorefront();toast("Đã lưu trữ; lịch sử đơn vẫn được giữ.");return render();}
@@ -1831,11 +2031,32 @@ function handleAction(el){
   if(a==="add-curated"){ const b=boxes.find(x=>x.id===el.dataset.id); return addCartLine({type:"curated",sourceId:b.id,name:b.name,unitPrice:b.price,summary:b.items.join(" · "),message:""}); }
   if(a==="customize"){ const b=boxes.find(x=>x.id===el.dataset.id); const target=`/hop-qua/${b.slug}?customize=1`; if(!state.user) return navigate(`/dang-nhap?returnTo=${encodeURIComponent(target)}`); return navigate(target); }
   if(a==="add-custom"){ const b=boxes.find(x=>x.id===el.dataset.id), p=state.personalize, total=b.price+cards.find(x=>x.id===p.card).price+ribbons.find(x=>x.id===p.ribbon).price; return addCartLine({type:"custom",sourceId:b.id,name:b.name+" · cá nhân hóa",unitPrice:total,summary:`${cards.find(x=>x.id===p.card).name} · ${ribbons.find(x=>x.id===p.ribbon).name}`,message:p.message,custom:structuredClone(p)}); }
-  if(a==="finder-choice"){ const key=state.finder.step===1?"recipient":state.finder.step===2?"occasion":"budget"; state.finder[key]=el.dataset.value;state.finder.recommendations=[];state.finder.aiError="";aiFinderImages={}; save(); return render(); }
-  if(a==="finder-next"){ state.finder.step++; save(); return render(); } if(a==="finder-step"){state.finder.step=Number(el.dataset.step);save();return render();}
-  if(a==="finder-reset"){state.finder=structuredClone(DEFAULT_STATE.finder);aiFinderImages={};save();return render();} if(a==="finder-edit"){state.finder.step=1;state.finder.recommendations=[];aiFinderImages={};save();return render();} if(a==="finder-relax"){state.finder.budget="500–800K";state.finder.step=4;state.finder.recommendations=[];aiFinderImages={};save();return render();}
+  if(a==="finder-set"){
+    const answers=state.finder.answers,key=el.dataset.key,value=el.dataset.value;answers[key]=value||null;
+    if(key==="recipientCountMode"){answers.recipientCount=value==="single"?1:value==="small_group"?2:6;answers.profileMode="shared";}
+    if(key==="recipient"&&!FINDER_FORMALITY_RECIPIENTS.has(value))answers.formality=null;
+    state.finder.recommendations=[];state.finder.candidates=[];state.finder.aiError="";finderCandidateCache.signature="";save();return render();
+  }
+  if(a==="finder-toggle"){
+    const answers=state.finder.answers,key=el.dataset.key,value=el.dataset.value,list=Array.isArray(answers[key])?answers[key]:[];
+    if(key==="exclusions"){
+      if(value==="Không có gì")answers[key]=list.includes(value)?[]:[value];
+      else {answers[key]=list.filter(x=>x!=="Không có gì");const i=answers[key].indexOf(value);i>=0?answers[key].splice(i,1):answers[key].push(value);}
+      if(!answers[key].includes("Màu sắc không hợp"))answers.excludedColorIds=[];
+    }else if(key==="interests"){
+      if(value==="Mình không rõ")answers[key]=list.includes(value)?[]:[value];
+      else {answers[key]=list.filter(x=>x!=="Mình không rõ");const i=answers[key].indexOf(value);if(i>=0)answers[key].splice(i,1);else if(answers[key].length<3)answers[key].push(value);else return toast("Chỉ chọn tối đa 3 sở thích.");}
+    }else {const limit=key==="styles"?2:99,i=list.indexOf(value);if(i>=0)list.splice(i,1);else if(list.length<limit)list.push(value);else return toast(`Chỉ chọn tối đa ${limit} phong cách.`);answers[key]=list;}
+    if(key==="excludedColorIds"&&answers.preferredColorId===value){answers.preferredColorId=null;answers.colorMode="auto";toast("Màu cần tránh được ưu tiên; màu chủ đạo đã chuyển sang Tùy gợi ý.");}
+    state.finder.recommendations=[];state.finder.candidates=[];finderCandidateCache.signature="";save();return render();
+  }
+  if(a==="finder-color"){const value=el.dataset.value,stateColor=state.finder.answers;stateColor.colorMode=value==="auto"?"auto":"selected";stateColor.preferredColorId=value==="auto"?null:value;state.finder.recommendations=[];state.finder.candidates=[];finderCandidateCache.signature="";save();return render();}
+  if(a==="finder-next"){const steps=finderQuestionSteps(),current=steps[state.finder.step];if(current&&!finderStepValid(current.id))return toast("Hãy hoàn tất câu hỏi bắt buộc này.");state.finder.step=Math.min(steps.length,state.finder.step+1);state.finder.recommendations=[];state.finder.candidates=[];finderCandidateCache.signature="";save();return render();}
+  if(a==="finder-back"){state.finder.step=Math.max(0,state.finder.step-1);save();return render();}
+  if(a==="finder-reset"){state.finder=defaultFinderState();aiFinderImages={};finderCandidateCache={signature:"",items:[]};save();return render();}
+  if(a==="finder-edit"){state.finder.step=0;state.finder.recommendations=[];state.finder.candidates=[];state.finder.aiError="";finderCandidateCache.signature="";save();return render();}
+  if(a==="finder-select")return useFinderCandidate(el.dataset.id);
   if(a==="generate-gift-recommendations")return requestAiGiftRecommendations();
-  if(a==="generate-gift-images")return requestAiGiftImages();
   if(a==="continue-return") return navigate(safeReturnTo(el.dataset.return)); if(a==="gate-builder") return navigate(`/dang-nhap?returnTo=${encodeURIComponent('/tu-tao-hop')}`);
   if(a==="builder-qty"){ const i=giftItems.find(x=>x.id===el.dataset.id), current=state.builder.items[i.id]||0, next=Math.max(0,Math.min(i.stock,current+Number(el.dataset.delta))); if(next===current&&Number(el.dataset.delta)>0) toast("Đã chạm số lượng tồn demo."); state.builder.items[i.id]=next;state.builder.aiLayouts=[];state.builder.aiLayoutId=null;state.builder.aiLayoutSignature="";clearPackingImage(); if(state.builder.packaging){const chosen=analyzeBoxFits(builderTotals().lines).find(x=>x.box.id===state.builder.packaging);if(!chosen?.layout){state.builder.packaging=null;toast("Các món mới không xếp vừa hộp đã chọn theo kích thước mm. Vui lòng chọn lại hộp.");}} save(); return render(); }
   if(a==="use-recommended-box"){const fit=analyzeBoxFits(builderTotals().lines).find(x=>x.box.id===el.dataset.id&&x.layout);if(!fit)return toast("Hộp này chưa có bố cục hợp lệ.");state.builder.packaging=fit.box.id;state.builder.aiLayouts=[];state.builder.aiLayoutId=null;state.builder.aiLayoutSignature="";clearPackingImage();save();toast("Đã dùng hộp vừa vặn do hệ thống thử xếp.");return render();}
@@ -1889,8 +2110,8 @@ function handleProductImages(input){
   Promise.all(files.map(f=>new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve({id:crypto.randomUUID(),name:f.name,data:reader.result,alt:"",cover:false});reader.onerror=reject;reader.readAsDataURL(f);}))).then(images=>{existing.push(...images);if(existing.length&&!existing.some(x=>x.cover))existing[0].cover=true;state.admin.uploads[key]=existing;if(!save()){existing.splice(existing.length-images.length,images.length);status.textContent="Bộ nhớ trình duyệt không đủ. Hãy thử ảnh nhỏ hơn hoặc xóa bớt ảnh.";return;}status.textContent="Tải ảnh vào bản demo thành công.";render();}).catch(()=>{status.textContent="Không đọc được tệp. Hãy chọn lại.";});
 }
 
-function compressModelPhoto(file){
-  return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onerror=reject;reader.onload=()=>{const image=new Image();image.onerror=reject;image.onload=()=>{const maxSide=900,scale=Math.min(1,maxSide/Math.max(image.naturalWidth,image.naturalHeight)),canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(image.naturalWidth*scale));canvas.height=Math.max(1,Math.round(image.naturalHeight*scale));const ctx=canvas.getContext("2d");ctx.fillStyle="#f4f0e8";ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0,canvas.width,canvas.height);resolve(canvas.toDataURL("image/webp",.82));};image.src=reader.result;};reader.readAsDataURL(file);});
+function compressModelPhoto(file,maxSide=900,quality=.82){
+  return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onerror=reject;reader.onload=()=>{const image=new Image();image.onerror=reject;image.onload=()=>{const scale=Math.min(1,maxSide/Math.max(image.naturalWidth,image.naturalHeight)),canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(image.naturalWidth*scale));canvas.height=Math.max(1,Math.round(image.naturalHeight*scale));const ctx=canvas.getContext("2d");ctx.fillStyle="#f4f0e8";ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0,canvas.width,canvas.height);resolve(canvas.toDataURL("image/webp",quality));};image.src=reader.result;};reader.readAsDataURL(file);});
 }
 
 async function saveAiReferences(form){
@@ -1906,6 +2127,71 @@ async function saveAiReferences(form){
     audit("Thêm ảnh tham khảo",`${title}: ${files.length} ảnh`);if(!save())throw new Error("Bộ nhớ trình duyệt không đủ. Hãy dùng ảnh nhỏ hơn hoặc xóa bớt mẫu.");toast(`Đã thêm ${files.length} ảnh vào thư viện AI.`);render();
   }catch(error){if(status)status.textContent=String(error?.message||"Không đọc được ảnh. Hãy thử lại.");toast(String(error?.message||"Không thêm được ảnh."));}
 }
+
+function csvTable(text){
+  const first=String(text).split(/\r?\n/,1)[0]||"",counts=[[",",(first.match(/,/g)||[]).length],[";",(first.match(/;/g)||[]).length],["\t",(first.match(/\t/g)||[]).length]],delimiter=counts.sort((a,b)=>b[1]-a[1])[0][0],rows=[];let row=[],cell="",quoted=false;
+  for(let i=0;i<String(text).length;i++){const c=text[i],next=text[i+1];if(c==='"'){if(quoted&&next==='"'){cell+='"';i++;}else quoted=!quoted;}else if(c===delimiter&&!quoted){row.push(cell.trim());cell="";}else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&next==='\n')i++;row.push(cell.trim());if(row.some(Boolean))rows.push(row);row=[];cell="";}else cell+=c;}
+  row.push(cell.trim());if(row.some(Boolean))rows.push(row);return rows;
+}
+function tableRecords(rows){if(!rows.length)return [];const headers=rows[0].map(x=>String(x||"").trim());return rows.slice(1).filter(row=>row.some(x=>String(x||"").trim())).map(row=>Object.fromEntries(headers.map((header,index)=>[header,row[index]??""])));}
+function importKey(value){return String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("vi").replace(/[^a-z0-9]/g,"");}
+function importValue(row,...aliases){const entries=Object.entries(row||{}),wanted=aliases.map(importKey);return entries.find(([key])=>wanted.includes(importKey(key)))?.[1]??"";}
+function importList(value){return (Array.isArray(value)?value:String(value||"").split(/[|;,]/)).map(x=>String(x).trim()).filter(Boolean);}
+function importPipeList(value){return (Array.isArray(value)?value:String(value||"").split(/[|;\n]/)).map(x=>String(x).trim()).filter(Boolean);}
+function importBool(value,fallback=false){if(typeof value==="boolean")return value;const v=importKey(value);if(!v)return fallback;return ["1","true","yes","y","co","có","x"].map(importKey).includes(v);}
+function defaultImportIcon(category){const key=importKey(category);if(/tra|tea/.test(key))return "tea_leaf";if(/caphe|coffee/.test(key))return "coffee_bean";if(/nen|candle/.test(key))return "candle";if(/banh|keo|socola|food/.test(key))return "gift_treat";if(/mypham|lamdep|skincare/.test(key))return "self_care";if(/sach|vanphong|notebook/.test(key))return "notebook";return "gift_item";}
+function importDimensions(value){const numbers=String(value||"").replace(/,/g,".").match(/\d+(?:\.\d+)?/g)?.map(Number)||[];return [Number(numbers[0]||0),Number(numbers[1]||0),Number(numbers[2]||0)];}
+function importTaggedAttributes(value){
+  const tokens=importPipeList(value),named={},plain=[];tokens.forEach(token=>{const match=String(token).match(/^\s*([^:=]+)\s*[:=]\s*(.+)$/);if(match)named[importKey(match[1])]=match[2].trim();else plain.push(token);});return {tokens,named,plain};
+}
+
+async function unzipXlsx(arrayBuffer){
+  const bytes=new Uint8Array(arrayBuffer),view=new DataView(arrayBuffer);let eocd=-1;for(let i=bytes.length-22;i>=Math.max(0,bytes.length-65557);i--){if(view.getUint32(i,true)===0x06054b50){eocd=i;break;}}if(eocd<0)throw new Error("File .xlsx không có cấu trúc ZIP hợp lệ.");
+  const count=view.getUint16(eocd+10,true),centralOffset=view.getUint32(eocd+16,true),decoder=new TextDecoder("utf-8"),entries=new Map();let offset=centralOffset;
+  for(let n=0;n<count;n++){if(view.getUint32(offset,true)!==0x02014b50)throw new Error("Không đọc được bảng thư mục trong file Excel.");const method=view.getUint16(offset+10,true),compressedSize=view.getUint32(offset+20,true),nameLength=view.getUint16(offset+28,true),extraLength=view.getUint16(offset+30,true),commentLength=view.getUint16(offset+32,true),localOffset=view.getUint32(offset+42,true),name=decoder.decode(bytes.slice(offset+46,offset+46+nameLength)),localNameLength=view.getUint16(localOffset+26,true),localExtraLength=view.getUint16(localOffset+28,true),dataStart=localOffset+30+localNameLength+localExtraLength,compressed=bytes.slice(dataStart,dataStart+compressedSize);let data;
+    if(method===0)data=compressed;else if(method===8){if(typeof DecompressionStream==="undefined")throw new Error("Trình duyệt này chưa hỗ trợ giải nén Excel. Hãy dùng Chrome/Edge mới hoặc lưu file thành CSV.");const stream=new Blob([compressed]).stream().pipeThrough(new DecompressionStream("deflate-raw"));data=new Uint8Array(await new Response(stream).arrayBuffer());}else throw new Error(`Excel dùng kiểu nén chưa hỗ trợ (${method}).`);entries.set(name,data);offset+=46+nameLength+extraLength+commentLength;
+  }return entries;
+}
+function xlsxCellIndex(reference){const letters=String(reference||"").match(/^[A-Z]+/i)?.[0]?.toUpperCase()||"A";let value=0;for(const char of letters)value=value*26+char.charCodeAt(0)-64;return value-1;}
+async function xlsxRecords(file){
+  const entries=await unzipXlsx(await file.arrayBuffer()),decoder=new TextDecoder("utf-8"),parser=new DOMParser(),sharedBytes=entries.get("xl/sharedStrings.xml"),shared=sharedBytes?[...parser.parseFromString(decoder.decode(sharedBytes),"application/xml").querySelectorAll("si")].map(node=>[...node.querySelectorAll("t")].map(x=>x.textContent||"").join("")):[],sheetName=[...entries.keys()].filter(x=>/^xl\/worksheets\/sheet\d+\.xml$/i.test(x)).sort()[0];if(!sheetName)throw new Error("Excel không có worksheet để đọc.");const xml=parser.parseFromString(decoder.decode(entries.get(sheetName)),"application/xml"),rows=[];
+  xml.querySelectorAll("sheetData row").forEach(rowNode=>{const row=[];rowNode.querySelectorAll("c").forEach(cell=>{const index=xlsxCellIndex(cell.getAttribute("r")),type=cell.getAttribute("t"),raw=cell.querySelector("v")?.textContent??"",inline=[...cell.querySelectorAll("is t")].map(x=>x.textContent||"").join("");row[index]=type==="s"?shared[Number(raw)]??"":type==="inlineStr"?inline:raw;});rows.push(row.map(x=>x??""));});return tableRecords(rows);
+}
+async function recordsFromImportFile(file){const lower=file.name.toLowerCase();if(lower.endsWith(".xlsx"))return xlsxRecords(file);const text=await file.text();if(lower.endsWith(".json")){const parsed=JSON.parse(text);if(Array.isArray(parsed))return parsed;const array=parsed.promptRules||parsed.combinationTemplates||parsed.products||parsed.data;return Array.isArray(array)?array:[parsed];}return tableRecords(csvTable(text));}
+function normalizePromptRule(row,index){return {id:String(importValue(row,"id","Mã prompt","promptId")||`prompt-${Date.now()}-${index+1}`).trim(),name:String(importValue(row,"name","Tên","Tên prompt")||`Bộ prompt ${index+1}`).trim(),recipients:importList(importValue(row,"recipients","recipient","Người nhận")),occasions:importList(importValue(row,"occasions","occasion","Dịp")),styles:importList(importValue(row,"styles","style","Phong cách")),matchPrompt:String(importValue(row,"matchPrompt","Prompt match")||"").trim(),combinationPrompt:String(importValue(row,"combinationPrompt","Prompt tổ hợp","Prompt to hop")||"").trim(),rerankPrompt:String(importValue(row,"rerankPrompt","Prompt chọn 5","Prompt chon 5")||"").trim(),imagePrompt:String(importValue(row,"imagePrompt","Prompt tạo ảnh","Prompt tao anh")||"").trim(),priority:Number(importValue(row,"priority","Ưu tiên")||0),active:importValue(row,"active","Hoạt động")===""?true:importBool(importValue(row,"active","Hoạt động"),true)};}
+function normalizeCombinationTemplate(row,index){return {id:String(importValue(row,"id","Mã tổ hợp","comboId")||`combo-${Date.now()}-${index+1}`).trim(),name:String(importValue(row,"name","Tên","Tên tổ hợp")||`Tổ hợp ${index+1}`).trim(),productSkus:importList(importValue(row,"productSkus","SKUs","SKU sản phẩm","Sản phẩm")),recipients:importList(importValue(row,"recipients","recipient","Người nhận")),occasions:importList(importValue(row,"occasions","occasion","Dịp")),styles:importList(importValue(row,"styles","style","Phong cách")),concept:String(importValue(row,"concept","Ý tưởng","Y tuong")||"").trim(),note:String(importValue(row,"note","Ghi chú")||"").trim(),active:importValue(row,"active","Hoạt động")===""?true:importBool(importValue(row,"active","Hoạt động"),true)};}
+function normalizeProductImportRow(row){
+  const get=(...keys)=>importValue(row,...keys),sku=String(get("sku","SKU biến thể","SKU bien the","Mã sản phẩm","Ma san pham")||"").trim().toUpperCase(),name=String(get("name","Tên sản phẩm","Ten san pham")||"").trim(),category=String(get("category","Danh mục","Danh muc")||"Món thêm").trim(),dims=importDimensions(get("Kích thước mm","Kich thuoc mm","dimensions","Kích thước")),avoid=importTaggedAttributes(get("Điều cần tránh","Dieu can tranh","restrictions")),attributes=importTaggedAttributes(get("Thuộc tính quà","Thuoc tinh qua","attributes")),avoidKey=avoid.tokens.map(importKey).join(" "),variantRaw=get("variantData","Biến thể JSON","Bien the JSON");
+  const giftRaw=String(get("giftType","Loại quà","Loai qua")||attributes.named.gift||attributes.named.loaiqua||attributes.plain.find(x=>/dùng hết|giữ|kết hợp|consumable|keepsake|mixed/i.test(x))||"").trim(),giftKey=importKey(giftRaw),giftType=/consumable|dunghet/.test(giftKey)?"consumable":/keepsake|giulau|giulamkyniem/.test(giftKey)?"keepsake":/mixed|kethop/.test(giftKey)?"mixed":"",colorRaw=get("colors","Màu","Mau")||attributes.named.color||attributes.named.mau||"",ageRaw=get("minimumAge","Tuổi tối thiểu","Tuoi toi thieu")||attributes.named.age||attributes.named.tuoi||attributes.named.tuoitoithieu||attributes.plain.find(x=>/^\s*\d+\s*\+?\s*$/.test(x))||0,ageMatch=String(ageRaw).match(/\d+/),oldAlcohol=get("containsAlcohol","Có cồn","Co con"),oldVegetarian=get("vegetarian","Ăn chay","An chay"),oldSugar=get("sugarLevel","Mức đường","Muc duong"),oldFragrance=get("fragranceIntensity","Mức mùi","Muc mui"),allergens=importPipeList(get("allergens","Dị ứng","Di ung"));
+  if(/hat|hanhnhan/.test(avoidKey))allergens.push("hạt");if(/sua/.test(avoidKey))allergens.push("sữa");if(/gluten/.test(avoidKey))allergens.push("gluten");if(/haisan/.test(avoidKey))allergens.push("hải sản");
+  let variantData=[];if(Array.isArray(variantRaw))variantData=variantRaw;else if(String(variantRaw||"").trim()){try{const parsed=JSON.parse(String(variantRaw));if(Array.isArray(parsed))variantData=parsed;}catch{variantData=[{_importError:"Biến thể JSON không hợp lệ"}];}}
+  const containsAlcohol=String(oldAlcohol).trim()?importBool(oldAlcohol):/cocon|ruou|bia|alcohol/.test(avoidKey),vegetarian=String(oldVegetarian).trim()?importBool(oldVegetarian,true):!/khongchay|khonganchay|khongphuhopanchay/.test(avoidKey),sugarLevel=String(oldSugar||"").trim()||(/khongduong/.test(avoidKey)?"none":/itduong|duongthap/.test(avoidKey)?"low":/nhieuduong|duongcao/.test(avoidKey)?"high":"normal"),fragranceIntensity=String(oldFragrance||"").trim()||(/muinong|huongnong/.test(avoidKey)?"strong":/muivua/.test(avoidKey)?"medium":/muinhe/.test(avoidKey)?"light":"none");
+  return {sku,name,category,brand:String(get("brand","Thương hiệu","Thuong hieu")||"").trim(),seller:String(get("seller","Nhà bán hàng","Nha ban hang")||"").trim(),short:String(get("short","Mô tả ngắn","Mo ta ngan")||name).trim(),long:String(get("long","Mô tả chi tiết","Mo ta chi tiet")||"").trim(),price:Number(get("price","Giá bán","Gia ban")||0),salePrice:Number(get("salePrice","Giá khuyến mãi","Gia khuyen mai")||0)||null,cost:Number(get("cost","Giá vốn","Gia von")||0),stock:Number(get("stock","Tồn kho","Ton kho")||0),threshold:Number(get("threshold","Ngưỡng tồn","Nguong ton")||3),status:String(get("status","Trạng thái","Trang thai")||"published").trim(),lead:Number(get("lead","Ngày chuẩn bị","Ngay chuan bi")||1),lengthMm:Number(get("lengthMm","Dài mm","Dai mm","Chiều dài")||dims[0]||0),widthMm:Number(get("widthMm","Rộng mm","Rong mm","Chiều rộng")||dims[1]||0),heightMm:Number(get("heightMm","Cao mm","Chiều cao")||dims[2]||0),weightG:Number(get("weightG","Gram","Khối lượng","Khoi luong")||0),shape:String(get("shape","Dạng bao bì","Dang bao bi")||"box").trim(),fragile:importBool(get("fragile","Dễ vỡ","De vo")),stackable:importBool(get("stackable","Được chồng","Duoc chong"),true),canSupport:importBool(get("canSupport","Được đặt món lên","Duoc dat mon len"),true),clearanceMm:Number(get("clearanceMm","Đệm an toàn mm","Dem an toan mm")||5),primaryFace:String(get("primaryFace","Mặt hướng lên","Mat huong len")||"top").trim(),recipients:importPipeList(get("recipients","Người nhận","Nguoi nhan")),occasions:importPipeList(get("occasions","Dịp","Dip")),interests:importPipeList(get("interests","Sở thích","So thich")),styles:importPipeList(get("styles","Style","Phong cách","Phong cach")),giftType,colors:importPipeList(colorRaw),containsAlcohol,vegetarian,sugarLevel,fragranceIntensity,minimumAge:Number(ageMatch?.[0]||0),allergens:[...new Set(allergens)],privateItem:/quariengtu|riengtu/.test(avoidKey),labelMode:String(get("labelMode","Kiểu nhãn AI","Kieu nhan AI")||attributes.named.label||"icon").trim(),iconId:String(get("iconId","Icon","Mã icon","Ma icon")||attributes.named.icon||defaultImportIcon(category)).trim(),variantData};
+}
+function refreshBulkErrors(){
+  const d=bulkImportDraft,errors=Object.values(d.fileErrors||{}).filter(Boolean),seenSku=new Set(),seenRule=new Set(),seenCombo=new Set();
+  d.productRows.forEach((row,index)=>{if(!row.sku)errors.push(`Dòng sản phẩm ${index+2}: thiếu SKU.`);else if(seenSku.has(normalizeSkuKey(row.sku)))errors.push(`SKU ${row.sku} bị lặp trong file.`);else seenSku.add(normalizeSkuKey(row.sku));if(!row.name)errors.push(`SKU ${row.sku||index+2}: thiếu tên sản phẩm.`);if(!(row.price>=0))errors.push(`SKU ${row.sku}: giá không hợp lệ.`);if([row.lengthMm,row.widthMm,row.heightMm,row.weightG].some(x=>!Number.isFinite(x)||x<=0))errors.push(`SKU ${row.sku}: cần đủ dài, rộng, cao (mm) và khối lượng (g) lớn hơn 0.`);if(row.variantData?.some(x=>x?._importError))errors.push(`SKU ${row.sku}: cột Biến thể JSON không phải mảng JSON hợp lệ.`);});
+  d.promptRules.forEach(rule=>{if(!rule.id||seenRule.has(rule.id))errors.push(`Mã prompt “${rule.id||"trống"}” bị thiếu hoặc trùng.`);seenRule.add(rule.id);if(!rule.combinationPrompt&&!rule.imagePrompt)errors.push(`Bộ prompt ${rule.id}: cần ít nhất prompt tổ hợp hoặc prompt tạo ảnh.`);});
+  d.combinationTemplates.forEach(combo=>{if(!combo.id||seenCombo.has(combo.id))errors.push(`Mã tổ hợp “${combo.id||"trống"}” bị thiếu hoặc trùng.`);seenCombo.add(combo.id);if(combo.productSkus.length<2||combo.productSkus.length>4)errors.push(`Tổ hợp ${combo.id}: phải có 2–4 SKU.`);});
+  const invalidImages=d.imageFiles.filter(file=>!["image/jpeg","image/png","image/webp"].includes(file.type)||file.size>8*1024*1024);if(invalidImages.length)errors.push(`${invalidImages.length} ảnh sai định dạng hoặc lớn hơn 8MB.`);d.errors=errors;
+}
+async function loadBulkFile(kind,file){
+  bulkImportDraft.busy=true;bulkImportDraft.fileErrors=bulkImportDraft.fileErrors||{};bulkImportDraft.fileNames[kind]=file.name;render();
+  try{const records=await recordsFromImportFile(file);if(kind==="prompts")bulkImportDraft.promptRules=records.map(normalizePromptRule);if(kind==="combinations")bulkImportDraft.combinationTemplates=records.map(normalizeCombinationTemplate);if(kind==="products")bulkImportDraft.productRows=records.map(normalizeProductImportRow);bulkImportDraft.fileErrors[kind]="";}catch(error){bulkImportDraft.fileErrors[kind]=`${file.name}: ${error?.message||"không đọc được file"}.`;}
+  bulkImportDraft.busy=false;refreshBulkErrors();render();
+}
+function mergeById(existing,incoming){const map=new Map(existing.map(x=>[String(x.id),x]));incoming.forEach(x=>map.set(String(x.id),{...(map.get(String(x.id))||{}),...x}));return [...map.values()];}
+function bulkProductRecord(row,existing,images){
+  const model3d={shape:row.shape==="cylinder"?"cylinder":"box",length:row.lengthMm,width:row.widthMm,height:row.heightMm,weight:row.weightG,fragile:row.fragile,stackable:row.stackable,canSupport:row.canSupport,clearance:row.clearanceMm,primaryFace:row.primaryFace||"top",labelFacing:"up",allowedRotations:"y",upright:false,fileName:"",sourceType:"photo-dimensions",sourceName:"Ảnh theo SKU và kích thước Excel",textureData:images[0]?.data||existing?.model3d?.textureData||""};
+  return {...existing,id:existing?.id||`bulk-${normalizeSkuKey(row.sku).toLocaleLowerCase()}`,kind:"item",name:row.name,sku:row.sku,slug:existing?.slug||row.name.toLocaleLowerCase("vi").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,""),brand:row.brand,seller:row.seller,short:row.short,long:row.long,categories:[row.category],category:row.category,tags:[...row.interests,...row.styles],price:row.price,salePrice:row.salePrice,cost:row.cost,stock:row.stock,threshold:row.threshold,lead:row.lead,status:["published","draft","paused","archived"].includes(row.status)?row.status:"published",size:Number(existing?.size||1),capacity:Number(existing?.capacity||1),builderEnabled:true,images:images.length?images:(existing?.images||[]),model3d,matchingTags:{recipients:row.recipients,occasions:row.occasions,interests:row.interests,styles:row.styles,giftType:row.giftType,colors:row.colors},restrictionTags:{containsAlcohol:row.containsAlcohol,vegetarian:row.vegetarian,sugarLevel:row.sugarLevel,fragranceIntensity:row.fragranceIntensity,minimumAge:row.minimumAge,allergens:row.allergens,privateItem:row.privateItem},aiVisual:{labelMode:row.labelMode==="blank"?"blank":"icon",iconId:row.iconId,frontImageApproved:!!images.length},variantData:row.variantData,allergens:row.allergens,recipients:row.recipients.length?row.recipients:["Bạn bè"],occasions:row.occasions.length?row.occasions:["Sinh nhật"],style:row.styles[0]||"Ấm áp",meaning:row.short,updatedAt:new Date().toISOString()};
+}
+async function commitBulkImport(){
+  if(bulkImportDraft.busy||bulkImportDraft.errors.length||!canAdmin("bulk"))return;bulkImportDraft.busy=true;render();const previous={products:state.admin.products,promptRules:state.admin.promptRules,combos:state.admin.productCombinationTemplates};
+  try{const productMap=new Map(previous.products.map(x=>[normalizeSkuKey(x.sku),x])),nextProducts=[...previous.products];for(const row of bulkImportDraft.productRows){const files=bulkImageFilesForSku(row.sku),imageData=[];for(const [index,file] of files.entries())imageData.push({id:crypto.randomUUID(),name:file.name,data:await compressModelPhoto(file,700,.74),alt:`${row.name} · ảnh ${index+1}`,cover:index===0});const existing=productMap.get(normalizeSkuKey(row.sku)),record=bulkProductRecord(row,existing,imageData),position=nextProducts.findIndex(x=>x.id===record.id);if(position>=0)nextProducts[position]=record;else nextProducts.push(record);}
+    state.admin.products=nextProducts;state.admin.promptRules=mergeById(previous.promptRules,bulkImportDraft.promptRules);state.admin.productCombinationTemplates=mergeById(previous.combos,bulkImportDraft.combinationTemplates);audit("Nhập dữ liệu hàng loạt",`${bulkImportDraft.productRows.length} sản phẩm · ${bulkImportDraft.promptRules.length} bộ prompt · ${bulkImportDraft.combinationTemplates.length} tổ hợp`);if(!save())throw new Error("Bộ nhớ trình duyệt không đủ cho toàn bộ ảnh. Hãy giảm số ảnh, giảm dung lượng hoặc dùng backend/object storage.");syncStorefront();finderCandidateCache={signature:"",items:[]};bulkImportDraft={promptRules:[],combinationTemplates:[],productRows:[],imageFiles:[],errors:[],fileNames:{},busy:false};toast("Đã nhập dữ liệu và đồng bộ sang cửa hàng.");render();
+  }catch(error){state.admin.products=previous.products;state.admin.promptRules=previous.promptRules;state.admin.productCombinationTemplates=previous.combos;bulkImportDraft.busy=false;refreshBulkErrors();save();toast(String(error?.message||"Không nhập được dữ liệu."));render();}
+}
+function downloadAdminTemplate(name,text,type="text/csv;charset=utf-8"){const blob=new Blob(["\uFEFF"+text],{type}),url=URL.createObjectURL(blob),link=document.createElement("a");link.href=url;link.download=name;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 
 function handleModelPhoto(input){
   const form=input.closest("#product-form"),key=form?.dataset.key,status=document.querySelector("#model-photo-status"),file=input.files?.[0];if(!form||!file)return;
@@ -1925,6 +2211,10 @@ function mountModelPhotoBuilder(){
 }
 
 function bindPageSpecific(){
+  [["#bulk-prompt-file","prompts"],["#bulk-combination-file","combinations"],["#bulk-product-file","products"]].forEach(([selector,kind])=>{const input=document.querySelector(selector);if(input)input.onchange=()=>{const file=input.files?.[0];if(file)loadBulkFile(kind,file);};});
+  const bulkImages=document.querySelector("#bulk-image-folder");if(bulkImages)bulkImages.onchange=()=>{bulkImportDraft.imageFiles=[...(bulkImages.files||[])];bulkImportDraft.fileNames.images=bulkImages.files?.[0]?.webkitRelativePath?.split("/")[0]||"Thư mục ảnh";refreshBulkErrors();render();};
+  const finderBind=(selector,key,event="input")=>{const node=document.querySelector(selector);if(node)node.addEventListener(event,()=>{state.finder.answers[key]=node.type==="number"?Math.max(Number(node.min||0),Math.min(Number(node.max||999),Number(node.value||0))):node.value;state.finder.recommendations=[];state.finder.candidates=[];state.finder.aiError="";finderCandidateCache.signature="";save();if(selector==="#finder-note"){const count=document.querySelector("#finder-note-count");if(count)count.textContent=node.value.length;}});};
+  finderBind("#finder-recipient-count","recipientCount","change");finderBind("#finder-exclusion-other","exclusionOther");finderBind("#finder-interest-other","interestOther");finderBind("#finder-note","additionalNote");
   const sort=document.querySelector("#sort-select"); if(sort) sort.onchange=()=>{const u=new URL(location.href);u.searchParams.set("sort",sort.value);navigate(u.pathname+u.search)};
   document.querySelectorAll('#filters input[type="radio"]').forEach(i=>i.onchange=()=>{const u=new URL(location.href);u.searchParams.set(i.name,i.value);navigate(u.pathname+u.search)});
   document.querySelectorAll('input[name="package"]').forEach(i=>i.onchange=()=>{state.builder.packaging=i.value;state.builder.aiLayouts=[];state.builder.aiLayoutId=null;state.builder.aiLayoutSignature="";clearPackingImage();save();render();});
@@ -1970,10 +2260,11 @@ function saveProductFromForm(form){
   if([price,cost,stock,threshold].some(n=>!Number.isFinite(n)||n<0)){err.textContent="Giá và số lượng không được âm.";return;}
   if(duplicate){err.textContent=`SKU hoặc slug đang trùng với “${duplicate.name}”.`;return;}
   const categories=String(fd.get("categories")||"").split(",").map(x=>x.trim()).filter(Boolean),tags=String(fd.get("tags")||"").split(",").map(x=>x.trim()).filter(Boolean),recipients=String(fd.get("recipients")||"").split(",").map(x=>x.trim()).filter(Boolean),items=String(fd.get("items")||"").split(/\r?\n/).map(x=>x.trim()).filter(Boolean),kind=String(fd.get("kind"));
+  const splitTags=name=>String(fd.get(name)||"").split(",").map(x=>x.trim()).filter(Boolean),matchingTags={recipients:splitTags("matchRecipients"),occasions:splitTags("matchOccasions"),interests:splitTags("matchInterests"),styles:splitTags("matchStyles"),giftType:String(fd.get("matchGiftType")||""),colors:splitTags("matchColors")},restrictionTags={containsAlcohol:fd.get("containsAlcohol")==="on",vegetarian:fd.get("vegetarian")==="on",sugarLevel:String(fd.get("sugarLevel")||"normal"),fragranceIntensity:String(fd.get("fragranceIntensity")||"none"),minimumAge:Number(fd.get("minimumAge")||0),allergens:splitTags("restrictionAllergens")},aiVisual={labelMode:String(fd.get("aiLabelMode")||"icon"),iconId:String(fd.get("aiIconId")||"").trim(),frontImageApproved:!!state.admin.modelPhotos[form.dataset.key]},variantData=String(fd.get("variantData")||"").split(/\r?\n/).map(line=>line.split("|").map(x=>x.trim())).filter(parts=>parts.some(Boolean)).map(parts=>{const dims=String(parts[4]||"").split(/[x×]/i).map(Number);return {sku:parts[0],name:parts[1],price:Number(parts[2]||0),stockQuantity:Number(parts[3]||0),dimensions:{lengthMm:Number(dims[0]||0),widthMm:Number(dims[1]||0),heightMm:Number(dims[2]||0)}};});
   const prior=state.admin.products.find(p=>p.id===id)?.model3d||{},textureData=state.admin.modelPhotos[form.dataset.key]||"";
   const model3d={...prior,sourceType:textureData?"photo-dimensions":"dimensions",sourceName:textureData?"Ảnh chính và kích thước thật":"Kích thước đóng gói",fileName:"",textureData,shape:String(fd.get("modelShape")||"box"),length:Number(fd.get("modelLength")||100),width:Number(fd.get("modelWidth")||70),height:Number(fd.get("modelHeight")||45),weight:Number(fd.get("modelWeight")||120),padding:Number(fd.get("modelPadding")||0),collider:String(fd.get("modelCollider")||"box"),maxLoad:Number(fd.get("modelMaxLoad")||0),upright:false,fragile:fd.get("modelFragile")==="on",compressible:fd.get("modelCompressible")==="on",canSupport:fd.get("modelCanSupport")==="on",stackable:true,allowedRotations:"y",primaryFace:"top",labelFacing:"up",modelStatus:fd.get("modelChecked")==="on"?"checked":"draft",modelVersion:`dimensions-${Date.now()}`,colliderVersion:`${String(fd.get("modelCollider")||"box")}-1`,color:prior.color||"#a98372"};
   if([model3d.length,model3d.width,model3d.height,model3d.weight].some(n=>!Number.isFinite(n)||n<=0)){err.textContent="Kích thước và khối lượng đóng gói phải lớn hơn 0.";return;}
-  const product={id:id||crypto.randomUUID(),kind,name,sku,slug,short:String(fd.get("short")),long:String(fd.get("long")||""),categories,tags,price,cost,stock,threshold,lead:Number(fd.get("lead")||1),status:String(fd.get("status")),size:Number(fd.get("size")||1),capacity:Number(fd.get("size")||1),builderEnabled:fd.get("builderEnabled")==="on",items,style:String(fd.get("style")||tags[0]||"Ấm áp"),recipients:recipients.length?recipients:["Bạn thân"],occasions:categories.length?categories:["Sinh nhật"],meaning:String(fd.get("short")),category:categories[0]||"Món thêm",images:structuredClone(state.admin.uploads[form.dataset.key]||[]),model3d,updatedAt:new Date().toISOString()};
+  const product={id:id||crypto.randomUUID(),kind,name,sku,slug,brand:String(fd.get("brand")||"").trim(),seller:String(fd.get("seller")||"").trim(),short:String(fd.get("short")),long:String(fd.get("long")||""),categories,tags,price,salePrice:Number(fd.get("salePrice")||0)||null,cost,stock,threshold,lead:Number(fd.get("lead")||1),status:String(fd.get("status")),size:Number(fd.get("size")||1),capacity:Number(fd.get("size")||1),builderEnabled:fd.get("builderEnabled")==="on",items,style:String(fd.get("style")||tags[0]||"Ấm áp"),recipients:matchingTags.recipients.length?matchingTags.recipients:(recipients.length?recipients:["Bạn thân"]),occasions:matchingTags.occasions.length?matchingTags.occasions:(categories.length?categories:["Sinh nhật"]),meaning:String(fd.get("short")),category:categories[0]||"Món thêm",images:structuredClone(state.admin.uploads[form.dataset.key]||[]),model3d,matchingTags,restrictionTags,aiVisual,variantData,allergens:restrictionTags.allergens,updatedAt:new Date().toISOString()};
   const index=state.admin.products.findIndex(p=>p.id===id);if(index>=0)state.admin.products[index]={...state.admin.products[index],...product};else state.admin.products.unshift(product);
   delete state.admin.uploads[form.dataset.key];delete state.admin.modelPhotos[form.dataset.key];audit(index>=0?"Cập nhật sản phẩm":"Tạo sản phẩm",name);save();syncStorefront();toast(index>=0?"Đã cập nhật sản phẩm.":"Đã tạo sản phẩm.");navigate("/quan-tri/san-pham");
 }
@@ -2004,7 +2295,9 @@ document.addEventListener("submit",e=>{
     const imageModel=String(fd.get("imageModel")||"").trim();
     const imagePrompt=String(fd.get("imagePrompt")||"").trim();
     const imageSize=String(fd.get("imageSize")||"1024x768");
-    const recommendationPrompt=String(fd.get("recommendationPrompt")||"").trim();
+    const productMatchPrompt=String(fd.get("productMatchPrompt")||"").trim();
+    const combinationPrompt=String(fd.get("combinationPrompt")||"").trim();
+    const rerankPrompt=String(fd.get("rerankPrompt")||"").trim();
     const enabled=fd.get("enabled")==="on";
 
     if((endpoint&&!model)||(!endpoint&&model)) return toast("Endpoint và Model của Text Model phải được nhập cùng nhau.");
@@ -2025,8 +2318,11 @@ document.addEventListener("submit",e=>{
       imageModel: imageModel || "@cf/black-forest-labs/flux-2-klein-4b",
       imageSize,
       imagePrompt: imagePrompt || DEFAULT_AI_IMAGE_PROMPT,
-      imagePromptVersion: 4,
-      recommendationPrompt: recommendationPrompt || DEFAULT_AI_RECOMMENDATION_PROMPT
+      imagePromptVersion: 5,
+      productMatchPrompt: productMatchPrompt || GIFT_PRODUCT_MATCH_PROMPT,
+      combinationPrompt: combinationPrompt || GIFT_COMBINATION_PROMPT,
+      rerankPrompt: rerankPrompt || GIFT_RERANK_PROMPT,
+      recommendationPrompt: DEFAULT_AI_RECOMMENDATION_PROMPT
     };
 
     if(key) aiSessionKey = key;

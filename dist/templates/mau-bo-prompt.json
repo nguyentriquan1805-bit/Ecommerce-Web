@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "huongDan": {
+    "id": "Mã duy nhất, không dùng lại giữa hai bộ prompt.",
+    "name": "Tên dễ nhận biết trong quản trị.",
+    "recipients": "Danh sách người nhận hoặc nhóm người nhận. Dùng * nếu áp dụng cho tất cả.",
+    "occasions": "Danh sách dịp. Dùng đúng nhãn trong questionnaire hoặc *.",
+    "styles": "Danh sách style. Dùng đúng nhãn trong questionnaire hoặc *.",
+    "matchPrompt": "Quy tắc bổ sung khi AI chấm từng sản phẩm.",
+    "combinationPrompt": "Quy tắc bổ sung khi AI ghép 2–4 sản phẩm.",
+    "rerankPrompt": "Quy tắc bổ sung khi AI chọn đúng 5 tổ hợp cuối.",
+    "imagePrompt": "Mô tả ánh sáng, bảng màu, vật liệu và cảm xúc. Không được đổi sản phẩm, hộp, kích thước hoặc bố cục.",
+    "priority": "Số lớn hơn được ưu tiên khi nhiều bộ prompt cùng khớp.",
+    "active": "true để sử dụng; false để lưu nhưng tạm ngừng."
+  },
+  "promptRules": [
+    {
+      "id": "birthday-friend-minimal",
+      "name": "Sinh nhật bạn bè tối giản",
+      "recipients": ["Bạn thân", "Bạn bè"],
+      "occasions": ["Sinh nhật"],
+      "styles": ["Tối giản"],
+      "matchPrompt": "Ưu tiên sản phẩm trẻ trung, dễ dùng, không quá riêng tư và có thể dùng ngay sau khi nhận.",
+      "combinationPrompt": "Tạo tổ hợp cân bằng gồm một món chính, một món dùng được và một điểm nhấn nhỏ. Tránh hai sản phẩm cùng công dụng hoặc cùng hình dáng bao bì.",
+      "rerankPrompt": "Ưu tiên các tổ hợp khác danh mục, gọn, có lý do tặng rõ ràng và không vượt ngân sách.",
+      "imagePrompt": "Minimal warm editorial styling. Use a restrained cream and sage palette, soft diffused studio light, natural kraft filler and clean negative space. Strict top-down 90-degree camera. No readable text, letters or fake logos; use declared product icons or blank labels.",
+      "priority": 10,
+      "active": true
+    }
+  ]
+}

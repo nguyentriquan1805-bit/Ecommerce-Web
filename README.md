@@ -16,6 +16,9 @@ Chạy `node preview-server.mjs`, sau đó mở `http://127.0.0.1:4174`. Nếu c
 - Thanh toán thử nghiệm với ba trạng thái thành công, thất bại và chờ xử lý; không thu tiền.
 - Bộ kiểm tra 3D dùng kích thước, khối lượng, collider đơn giản và quy tắc hỗ trợ minh họa. Đây là hỗ trợ xếp hộp, không thay thế bước kiểm tra vật lý của nhân viên đóng gói.
 - Khu vực người bán tại `/quan-tri` gồm tổng quan, sản phẩm, tồn kho, tùy chọn hộp, đơn hàng, giao hàng và cài đặt.
+- Trang `/quan-tri/nhap-hang-loat` nhận bốn nguồn dữ liệu: bộ prompt JSON/CSV, tổ hợp sản phẩm JSON/CSV, danh mục `.xlsx`/CSV và cả thư mục ảnh đặt tên theo SKU. Hệ thống xem trước, báo lỗi, ghép tối đa 5 ảnh/SKU rồi mới cho xác nhận nhập.
+- File mẫu nằm trong `dist/templates`: Excel demo chỉ còn 13 cột nhưng vẫn đủ dữ liệu khớp questionnaire, JSON bộ prompt theo người nhận/dịp/style và CSV tổ hợp 2–4 SKU.
+- Gift Finder chạy questionnaire đầy đủ, lọc cứng điều cần tránh, ghép tối đa 4 món, thử kích thước thật với hộp và chỉ tạo ảnh AI sau khi khách chọn đúng một phương án. Ảnh style không còn được gửi vào AI; website nối art direction dạng text từ bộ prompt đã khớp.
 - Sản phẩm đã đăng bán, tồn kho, bao bì, thiệp, ruy băng và lịch giao được đồng bộ sang cửa hàng, Gift Finder, Builder và checkout trong cùng trình duyệt.
 - Ảnh sản phẩm có thể chọn trực tiếp từ thiết bị (JPG/PNG/WebP, tối đa 5MB/ảnh và 8 ảnh) và được lưu trong localStorage của trình duyệt demo.
 - Trong trang sửa sản phẩm, người bán có thể chụp/tải một ảnh mặt trước rồi nhập chiều ngang, chiều sâu và chiều cao. Demo tự dựng khung hộp hoặc hình trụ đúng kích thước và phủ ảnh đó lên bề mặt để sản phẩm xuất hiện trong bàn xếp 3D.
